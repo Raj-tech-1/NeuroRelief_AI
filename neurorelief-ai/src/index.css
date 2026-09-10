@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #FDF2F8;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Glassmorphism card style */
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+}
+
+/* Pink gradient header */
+.gradient-header {
+  background: linear-gradient(135deg, #FDDDE6 0%, #FBB6CE 50%, #F9A8D4 100%);
+}
+
+/* Active tab gradients */
+.tab-overview { background: linear-gradient(135deg, #DB2777, #E11D48); }
+.tab-cycle { background: linear-gradient(135deg, #DB2777, #E11D48); }
+.tab-mood { background: linear-gradient(135deg, #EA580C, #F59E0B); }
+.tab-symptom { background: linear-gradient(135deg, #7C3AED, #8B5CF6); }
+.tab-doctor { background: linear-gradient(135deg, #0D9488, #14B8A6); }
+.tab-learn { background: linear-gradient(135deg, #059669, #10B981); }
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #F9A8D4; border-radius: 3px; }
