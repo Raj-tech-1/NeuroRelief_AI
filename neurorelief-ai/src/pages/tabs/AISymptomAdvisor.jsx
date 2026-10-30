@@ -1,11 +1,38 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useFormat } from '../../i18n/format'
+import { localizeFixed } from '../../i18n/serverText'
+import EnglishOnly from '../../components/EnglishOnly'
+import VoiceAssistant from '../../components/VoiceAssistant'
 import { getPainPrediction } from '../../services/predictions'
-import { getCycleData, getMoodData } from '../../services/api'
+import { getCycleData, getMoodData, getPredictionHistory, getArticles } from '../../services/api'
+import { Icon } from '../../components/icons'
+import imgWater from '../../assets/illustrations/tip-water.svg'
+import imgNutrition from '../../assets/illustrations/tip-nutrition.svg'
+import imgMovement from '../../assets/illustrations/tip-movement.svg'
+import imgSleep from '../../assets/illustrations/tip-sleep.svg'
+import imgPain from '../../assets/illustrations/res-pain.svg'
+import imgDoctor from '../../assets/illustrations/res-doctor.svg'
+import imgSunrise from '../../assets/illustrations/res-sunrise.svg'
 
 const commonSymptoms = [
   'Headache', 'Fatigue', 'Nausea', 'Bloating', 'Cramps', 'Back pain',
   'Breast tenderness', 'Mood swings', 'Acne', 'Insomnia', 'Food cravings',
   'Anxiety', 'Dizziness'
+]
+
+// Display order, icon and label for the symptom tiles (the stored symptom names are unchanged)
+const tiles = [
+  { name: 'Cramps', icon: 'uterus' }, { name: 'Bloating', icon: 'stomach' }, { name: 'Headache', icon: 'head' },
+  { name: 'Mood swings', icon: 'smile' }, { name: 'Acne', icon: 'face' }, { name: 'Fatigue', icon: 'battery' },
+  { name: 'Back pain', icon: 'spine' }, { name: 'Nausea', icon: 'stomach' }, { name: 'Breast tenderness', icon: 'heart' },
+  { name: 'Insomnia', icon: 'moon' }, { name: 'Food cravings', icon: 'bowl' }, { name: 'Anxiety', icon: 'brain' }, { name: 'Dizziness', icon: 'dizzy' },
+]
+
+// "Quick options" shortcuts: [label translation key, stored symptom name]
+const quickOptions = [
+  ['symptom.Cramps', 'Cramps'], ['symptom.Bloating', 'Bloating'], ['symptom.Headache', 'Headache'], ['symptom.Back pain', 'Back pain'],
+  ['quick.moodChanges', 'Mood swings'], ['symptom.Fatigue', 'Fatigue'], ['symptom.Acne', 'Acne'], ['quick.sleepIssues', 'Insomnia'],
 ]
 
 const symptomWeights = {
@@ -14,39 +41,55 @@ const symptomWeights = {
   'Anxiety': 2, 'Dizziness': 2, 'Insomnia': 1, 'Acne': 0, 'Food cravings': 0,
 }
 
-const adviceBySymptom = {
-  'Cramps': 'Apply a warm compress to your lower abdomen. Gentle yoga poses like child\'s pose may help relieve cramping.',
-  'Back pain': 'Try lower back stretches and maintain good posture. A warm bath can help ease muscle tension.',
-  'Headache': 'Stay hydrated and rest in a dark, quiet room. Avoid screen time if possible.',
-  'Nausea': 'Sip ginger tea or eat small, bland meals. Avoid strong smells and greasy foods.',
-  'Fatigue': 'Prioritize 7-9 hours of sleep. Short 20-minute naps can help restore energy without disrupting nighttime sleep.',
-  'Bloating': 'Reduce sodium intake and eat potassium-rich foods like bananas. Gentle walking aids digestion.',
-  'Breast tenderness': 'Wear a supportive bra and reduce caffeine intake. Evening primrose oil may help.',
-  'Mood swings': 'Practice mindfulness or deep breathing. Regular exercise releases endorphins that stabilize mood.',
-  'Anxiety': 'Try box breathing (4-4-4-4) and limit caffeine. Journaling can help process anxious thoughts.',
-  'Dizziness': 'Stand up slowly, stay hydrated, and ensure you\'re eating regularly. Check your iron levels.',
-  'Insomnia': 'Establish a consistent bedtime routine. Avoid screens 1 hour before bed. Try chamomile tea.',
-  'Acne': 'Keep a gentle skincare routine. Avoid touching your face and consider zinc-rich foods.',
-  'Food cravings': 'Eat balanced meals with protein and fiber to stabilize blood sugar. Dark chocolate (70%+) can satisfy sweet cravings healthily.',
-}
-
 // Map phase names to model input
 const phaseToModel = {
   'Menstrual': 'Menstrual', 'Follicular': 'Follicular',
   'Ovulatory': 'Fertility', 'Luteal': 'Luteal', 'Unknown': 'Follicular'
 }
 
-export default function AISymptomAdvisor() {
-  const [started, setStarted] = useState(false)
+// Wellness tips (general educational content): title/text come from advisor.tip.<id>
+const wellnessTips = [
+  { id: 'water', img: imgWater },
+  { id: 'nutrition', img: imgNutrition },
+  { id: 'movement', img: imgMovement },
+  { id: 'sleep', img: imgSleep },
+]
+const RESOURCE_IDS = [8, 3, 2, 14]            // existing Learn articles
+const resourceImages = [imgPain, imgSunrise, imgNutrition, imgDoctor]
+
+const card = 'bg-white/90 rounded-2xl border border-brand-100/70 shadow-sm shadow-brand-100/50'
+
+function CardHeader({ id, icon, title, subtitle, right }) {
+  return (
+    <div className="flex items-start justify-between gap-3 mb-2.5 fit-hdr">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="shrink-0 fit-ico rounded-full bg-brand-50 text-brand-600 flex items-center justify-center"><Icon name={icon} size={20} /></span>
+        <div className="min-w-0">
+          <h2 id={id} className="font-display text-lg font-bold text-gray-900 leading-tight break-words">{title}</h2>
+          {subtitle && <p className="text-xs text-gray-500 short-hide">{subtitle}</p>}
+        </div>
+      </div>
+      {right}
+    </div>
+  )
+}
+
+export default function AISymptomAdvisor({ onTabChange }) {
+  const { t } = useTranslation()
+  const fmt = useFormat()
   const [selectedSymptoms, setSelectedSymptoms] = useState([])
   const [description, setDescription] = useState('')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(null)   // { key } | { text } so it follows the selected language
+  const [history, setHistory] = useState([])
+  const [articles, setArticles] = useState([])
+  const textareaRef = useRef(null)
 
   // Auto-filled from user's saved data
   const [userContext, setUserContext] = useState(null)
   const [loadingContext, setLoadingContext] = useState(true)
+  const [voiceOpen, setVoiceOpen] = useState(false)
 
   useEffect(() => {
     async function loadUserContext() {
@@ -85,6 +128,8 @@ export default function AISymptomAdvisor() {
       setLoadingContext(false)
     }
     loadUserContext()
+    getPredictionHistory().then(setHistory).catch(() => {})
+    getArticles().then(all => setArticles(RESOURCE_IDS.map(id => all.find(a => a.id === id)).filter(Boolean))).catch(() => {})
   }, [])
 
   function toggleSymptom(s) {
@@ -93,14 +138,14 @@ export default function AISymptomAdvisor() {
 
   async function handleGetAdvice() {
     if (selectedSymptoms.length === 0 && !description.trim()) {
-      setError('Please select at least one symptom or describe what you are experiencing')
+      setError({ key: 'advisor.err.pickOne' })
       return
     }
     if (!userContext?.canPredict) {
-      setError('Not enough data yet. Log at least one cycle or one mood check-in first - a prediction without them would not be personalised.')
+      setError({ key: 'advisor.err.notEnough' })
       return
     }
-    setError('')
+    setError(null)
     setLoading(true)
 
     const totalWeight = selectedSymptoms.reduce((sum, s) => sum + (symptomWeights[s] || 1), 0)
@@ -124,209 +169,284 @@ export default function AISymptomAdvisor() {
       age: 25,
     }
 
-    const prediction = await getPainPrediction(predictionInput)
-    const advice = selectedSymptoms.map(s => ({
-      symptom: s,
-      advice: adviceBySymptom[s] || 'Monitor this symptom and consult a healthcare provider if it persists.'
-    }))
+    let prediction
+    try {
+      prediction = await getPainPrediction(predictionInput)
+    } catch (err) {
+      // No fabricated result: drop any stale prediction so the Device Panel cannot apply it
+      localStorage.removeItem('neurorelief_last_prediction')
+      setResult(null)
+      setError({ key: `advisor.err.${err.code || 'generic'}` })
+      setLoading(false)
+      return
+    }
+    const advice = selectedSymptoms.map(s => ({ symptom: s }))   // guidance text is looked up per language at render
 
     setResult({ symptoms: selectedSymptoms, description, prediction, advice, context: userContext })
     // Save prediction for Device Panel auto-fill
     localStorage.setItem('neurorelief_last_prediction', JSON.stringify(prediction))
     setLoading(false)
+    getPredictionHistory().then(setHistory).catch(() => {})
   }
 
   function handleReset() {
     setResult(null)
     setSelectedSymptoms([])
     setDescription('')
-    setError('')
+    setError(null)
   }
 
-  // Empty state
-  if (!started) {
-    return (
-      <div className="glass-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-brand-800">AI Symptom Advisor</h3>
-          <button onClick={() => setStarted(true)} className="px-4 py-1.5 border border-brand-300 text-brand-600 text-sm rounded-lg hover:bg-brand-50">Get Advice</button>
-        </div>
-        <div className="text-center py-16">
-          <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4"><span className="text-3xl">🤖</span></div>
-          <p className="text-gray-500 mb-2">Get personalized AI guidance for your symptoms</p>
-          <p className="text-xs text-gray-400 mb-4">Powered by a Random Forest model trained on real clinical data (87.8% accuracy)</p>
-          <button onClick={() => setStarted(true)} className="px-8 py-3 bg-brand-500 text-white rounded-lg font-medium hover:bg-brand-600">Start Analysis</button>
-        </div>
-      </div>
-    )
-  }
+  const focusInput = () => textareaRef.current?.focus()
+  const todayLabel = fmt.date(Date.now())
+  const cannotPredict = !loadingContext && !userContext?.canPredict
+  const tPhase = ph => t(`phase.${ph}`, { defaultValue: ph })
+  const tSev = sv => t(`severity.${sv}`, { defaultValue: sv })
+  const pct = c => fmt.number(Math.round((c || 0) * 100))
+  // recommendation text comes from the model service as one of three fixed English sentences;
+  // known sentences are shown in the selected language, anything else is shown as-is and marked English-only
+  const recText = result ? localizeFixed('recommendation', result.prediction.recommendation) : null
 
-  // Result state
-  if (result) {
-    return (
-      <div className="glass-card p-6">
-        <h3 className="text-lg font-bold text-brand-800 mb-4">AI Analysis Result</h3>
+  // "Today's Insight" and "AI Pain Prediction" only ever show real data
+  const insight = result
+    ? { title: t('advisor.pred', { severity: tSev(result.prediction.predicted_severity) }), text: recText.text, englishOnly: recText.englishOnly }
+    : cannotPredict
+      ? { title: t('advisor.notEnoughTitle'), text: t('advisor.notEnoughText') }
+      : userContext?.hasCycleData
+        ? { title: t('advisor.phaseDayTitle', { phase: tPhase(userContext.phase), day: fmt.number(userContext.dayOfCycle) }), text: userContext.usingAverage ? t('advisor.usingAvgText', { days: fmt.number(userContext.daysLogged) }) : t('advisor.describePersonal') }
+        : { title: t('advisor.noSymptoms'), text: t('advisor.shareFeeling') }
 
-        {/* Personalization badge */}
-        {result.context?.hasCycleData || result.context?.hasMoodData ? (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center gap-2">
-            <span className="text-lg">🎯</span>
-            <div>
-              <p className="text-sm font-medium text-blue-800">Personalized Prediction</p>
-              <p className="text-xs text-blue-600">
-                {result.context.usingAverage ? `Using your ${result.context.daysLogged}-day average. ` : ''}
-                {result.context.hasCycleData ? `${result.context.phase} phase (Day ${result.context.dayOfCycle})` : ''}
-                {result.context.hasCycleData && result.context.hasMoodData ? ' • ' : ''}
-                {result.context.hasMoodData ? `Sleep ${result.context.sleepHours}/10, Stress ${result.context.stressLevel}/10` : ''}
-              </p>
+  const latest = result?.prediction
+    ? { severity: result.prediction.predicted_severity, confidence: result.prediction.confidence, when: t('advisor.justNow') }
+    : history[0] ? { severity: history[0].predicted_severity, confidence: history[0].confidence, when: fmt.isoDate(history[0].date) } : null
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_312px] gap-3 fit-gap xl:h-full xl:min-h-0">
+      {/* ---------------- Left column ---------------- */}
+      <div className="flex flex-col gap-3 fit-gap min-w-0 xl:min-h-0">
+        {/* Describe your symptoms */}
+        <section className={`${card} fit-card shrink-0`} aria-labelledby="describe-h">
+          <div className="flex items-center gap-3 mb-2.5 fit-hdr">
+            <span className="shrink-0 fit-ico rounded-full bg-brand-50 text-brand-600 flex items-center justify-center"><Icon name="message" size={20} /></span>
+            <div className="min-w-0 mr-auto">
+              <h2 id="describe-h" className="font-display text-xl font-bold text-gray-900 leading-tight">{t('advisor.describe')}</h2>
+              <p className="text-xs text-gray-500 short-hide">{t('advisor.describeSub')}</p>
             </div>
+            <button onClick={() => setVoiceOpen(true)} aria-haspopup="dialog"
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-200 text-brand-700 hover:bg-brand-50 text-xs font-semibold focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">
+              <Icon name="mic" size={16} /> {t('assistant.open')}
+            </button>
           </div>
-        ) : (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mb-4">
-            <p className="text-xs text-yellow-700">Tip: Log your cycle and mood data for more accurate personalized predictions.</p>
+
+          <div className="relative rounded-xl border border-brand-100 bg-white focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-200/60 transition">
+            <label htmlFor="symptom-text" className="sr-only">{t('advisor.describe')}</label>
+            <textarea id="symptom-text" ref={textareaRef} value={description} maxLength={500} onChange={e => setDescription(e.target.value)}
+              placeholder={t('advisor.placeholder')}
+              className="sym-textarea w-full resize-none bg-transparent p-3 pb-9 text-sm focus:outline-none rounded-xl" />
+            <span className="absolute bottom-3 right-44 text-xs text-gray-400" aria-live="off">{fmt.number(description.length)}/500</span>
+            <button onClick={handleGetAdvice} disabled={loading || !userContext?.canPredict}
+              className="absolute bottom-2 right-2 px-5 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300">
+              {loading ? t('advisor.analyzing') : cannotPredict ? t('advisor.logToEnable') : <>{t('advisor.getInsights')} <Icon name="arrow" size={16} /></>}
+            </button>
           </div>
-        )}
+          {error && <p role="alert" className="text-xs text-red-600 mt-2">{error.key ? t(error.key) : error.text}</p>}
 
-        <div className="bg-purple-50 p-4 rounded-xl mb-4">
-          <p className="font-semibold text-gray-900">Pain Prediction</p>
-          <p className="text-sm text-gray-600 mt-1">
-            Severity: <span className="font-bold text-brand-700">{result.prediction.predicted_severity}</span>
-            {' • '}Risk: <span className={`font-bold ${result.prediction.risk_level === 'high' ? 'text-red-600' : result.prediction.risk_level === 'moderate' ? 'text-orange-600' : 'text-green-600'}`}>{result.prediction.risk_level}</span>
-            {' • '}Confidence: {Math.round(result.prediction.confidence * 100)}%
-          </p>
-        </div>
-
-        {/* High pain warning */}
-        {result.prediction.risk_level === 'high' && (
-          <div className="bg-red-50 border border-red-300 rounded-xl p-4 mb-4">
-            <p className="font-semibold text-red-800">⚠️ High Pain Alert</p>
-            <p className="text-sm text-red-600 mt-1">High pain severity predicted. Consider using TENS therapy and heat therapy. If pain is severe, consult a healthcare provider.</p>
-          </div>
-        )}
-
-        <div className="bg-green-50 p-4 rounded-xl mb-4">
-          <p className="font-semibold text-gray-900">Overall Recommendation</p>
-          <p className="text-sm text-gray-600 mt-1">{result.prediction.recommendation}</p>
-        </div>
-
-        {result.advice.length > 0 && (
-          <div className="mb-4">
-            <p className="font-semibold text-gray-900 mb-2">Symptom-Specific Guidance</p>
-            {result.advice.map((item, i) => (
-              <div key={i} className="bg-blue-50 p-3 rounded-xl mb-2">
-                <p className="text-sm font-semibold text-blue-800">{item.symptom}</p>
-                <p className="text-sm text-gray-600 mt-1">{item.advice}</p>
-              </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-gray-700">{t('advisor.quick')}</span>
+            {quickOptions.map(([labelKey, name]) => (
+              <button key={labelKey} onClick={() => toggleSymptom(name)} aria-pressed={selectedSymptoms.includes(name)}
+                className={`px-2 py-0.5 rounded-full text-[11px] border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                  selectedSymptoms.includes(name) ? 'bg-brand-700 text-white border-brand-700' : 'bg-brand-50 text-brand-800 border-brand-100 hover:bg-brand-100'}`}>
+                {t(labelKey)}
+              </button>
             ))}
           </div>
-        )}
+        </section>
 
-        {result.prediction.recommended_tens_intensity > 0 && (
-          <div className="bg-orange-50 p-4 rounded-xl mb-4">
-            <p className="font-semibold text-gray-900">Suggested Therapy Settings</p>
-            <p className="text-sm text-gray-600 mt-1">
-              TENS intensity: {result.prediction.recommended_tens_intensity}% •
-              Frequency: {result.prediction.recommended_tens_frequency}Hz •
-              Heat: {result.prediction.recommended_heat_temp}°C
-            </p>
+        {/* Middle: result, or common symptoms + recent check-ins */}
+        {result ? (
+          <section className={`${card} fit-card xl:flex-1 xl:min-h-0 flex flex-col`} aria-labelledby="result-h">
+            <CardHeader id="result-h" icon="brain" title={t('advisor.resultTitle')} subtitle={t('advisor.resultSub')}
+              right={<button onClick={handleReset} className="shrink-0 px-4 py-1.5 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-medium">{t('advisor.newAnalysis')}</button>} />
+            <div className="xl:flex-1 xl:min-h-0 overflow-y-auto pr-1 space-y-3">
+              {result.context?.hasCycleData || result.context?.hasMoodData ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-2">
+                  <Icon name="bolt" size={18} className="text-blue-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">{t('advisor.personalized')}</p>
+                    <p className="text-xs text-blue-600">
+                      {result.context.usingAverage ? `${t('advisor.usingAverage', { days: fmt.number(result.context.daysLogged) })} ` : ''}
+                      {result.context.hasCycleData ? t('advisor.phaseDay', { phase: tPhase(result.context.phase), day: fmt.number(result.context.dayOfCycle) }) : ''}
+                      {result.context.hasCycleData && result.context.hasMoodData ? ' • ' : ''}
+                      {result.context.hasMoodData ? t('advisor.sleepStress', { sleep: result.context.sleepHours, stress: result.context.stressLevel }) : ''}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                  <p className="text-xs text-yellow-700">{t('advisor.logTip')}</p>
+                </div>
+              )}
+
+              <div className="bg-purple-50 p-3 rounded-xl">
+                <p className="font-semibold text-gray-900 text-sm">{t('advisor.painPrediction')}</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  {t('advisor.severity')}: <span className="font-bold text-brand-700">{tSev(result.prediction.predicted_severity)}</span>
+                  {' • '}{t('advisor.risk')}: <span className={`font-bold ${result.prediction.risk_level === 'high' ? 'text-red-600' : result.prediction.risk_level === 'moderate' ? 'text-orange-600' : 'text-green-600'}`}>{t(`riskLevel.${result.prediction.risk_level}`, { defaultValue: result.prediction.risk_level })}</span>
+                  {' • '}{t('advisor.confidence')}: {pct(result.prediction.confidence)}%
+                </p>
+              </div>
+
+              {result.prediction.risk_level === 'high' && (
+                <div className="bg-red-50 border border-red-300 rounded-xl p-3">
+                  <p className="font-semibold text-red-800 text-sm flex items-center gap-1.5"><Icon name="bolt" size={16} /> {t('advisor.highAlert')}</p>
+                  <p className="text-xs text-red-600 mt-1">{t('advisor.highAlertText')}</p>
+                </div>
+              )}
+
+              <div className="bg-green-50 p-3 rounded-xl">
+                <p className="font-semibold text-gray-900 text-sm">{t('advisor.overall')}</p>
+                <p className="text-sm text-gray-600 mt-1">{recText.text}{recText.englishOnly && <EnglishOnly />}</p>
+              </div>
+
+              {result.advice.length > 0 && (
+                <div>
+                  <p className="font-semibold text-gray-900 text-sm mb-2">{t('advisor.guidance')}</p>
+                  <div className="grid md:grid-cols-2 gap-2">
+                    {result.advice.map(item => (
+                      <div key={item.symptom} className="bg-blue-50 p-3 rounded-xl">
+                        <p className="text-sm font-semibold text-blue-800">{t(`symptom.${item.symptom}`, { defaultValue: item.symptom })}</p>
+                        <p className="text-xs text-gray-600 mt-1">{t(`advice.${item.symptom}`, { defaultValue: t('advice.default') })}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {result.prediction.recommended_tens_intensity > 0 && (
+                <div className="bg-orange-50 p-3 rounded-xl">
+                  <p className="font-semibold text-gray-900 text-sm">{t('advisor.therapy')}</p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {t('advisor.therapyLine', { intensity: result.prediction.recommended_tens_intensity, freq: result.prediction.recommended_tens_frequency, heat: result.prediction.recommended_heat_temp })}
+                  </p>
+                </div>
+              )}
+
+              {result.description && (
+                <div className="bg-gray-50 p-3 rounded-xl">
+                  <p className="text-xs text-gray-500">{t('advisor.yourDescription')}</p>
+                  <p className="text-sm text-gray-700">{result.description}</p>
+                </div>
+              )}
+            </div>
+          </section>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-[1.25fr_1fr] gap-3 fit-gap xl:flex-1 xl:min-h-0">
+            {/* Common symptoms */}
+            <section className={`${card} fit-card flex flex-col min-h-0`} aria-labelledby="common-h">
+              <CardHeader id="common-h" icon="heart" title={t('advisor.common')} subtitle={t('advisor.commonSub')}
+                right={selectedSymptoms.length > 0 ? <span className="text-xs bg-brand-100 text-brand-800 px-2.5 py-1 rounded-full font-medium">{t('advisor.selected', { n: fmt.number(selectedSymptoms.length) })}</span> : null} />
+              <div className="sym-grid xl:flex-1 xl:min-h-0 xl:overflow-y-auto pr-0.5 content-start">
+                {tiles.map(tile => {
+                  const on = selectedSymptoms.includes(tile.name)
+                  return (
+                    <button key={tile.name} onClick={() => toggleSymptom(tile.name)} aria-pressed={on}
+                      className={`flex items-center gap-2 px-2.5 sym-tile rounded-xl border text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                        on ? 'bg-brand-100 border-brand-400 text-brand-900' : 'bg-white border-brand-100/80 text-gray-800 hover:bg-brand-50'}`}>
+                      <Icon name={tile.icon} size={20} className="sym-t-ico shrink-0 text-brand-600" />
+                      <span className="flex-1 text-xs font-medium leading-tight">{t(`symptomTile.${tile.name}`, { defaultValue: t(`symptom.${tile.name}`) })}</span>
+                      <Icon name={on ? 'check' : 'chevron'} size={14} className={`sym-t-chev ${on ? 'text-brand-700' : 'text-gray-400'}`} />
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* Recent check-ins */}
+            <section className={`${card} fit-card flex flex-col min-h-0`} aria-labelledby="recent-h">
+              <CardHeader id="recent-h" icon="history" title={t('advisor.recentCheckins')} subtitle={t('advisor.recentSub')} />
+              {history.length === 0 ? (
+                <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center py-2">
+                  <span className="w-12 h-12 rounded-xl bg-brand-50 text-brand-500 flex items-center justify-center mb-2"><Icon name="doc" size={24} /></span>
+                  <p className="text-sm font-semibold text-gray-900">{t('advisor.noCheckins')}</p>
+                  <p className="text-xs text-gray-500 mt-1 max-w-[230px]">{t('advisor.noCheckinsText')}</p>
+                  <button onClick={focusInput} className="mt-3 px-5 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-semibold">{t('advisor.logFirst')}</button>
+                </div>
+              ) : (
+                <ul className="xl:flex-1 xl:min-h-0 overflow-y-auto space-y-2 pr-0.5">
+                  {history.slice(0, 8).map(h => (
+                    <li key={h.pred_id} className="flex items-center gap-3 p-2.5 rounded-xl bg-brand-50/50 border border-brand-100/60">
+                      <span className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${h.predicted_severity === 'High' ? 'bg-red-100 text-red-600' : h.predicted_severity === 'Moderate' ? 'bg-orange-100 text-orange-600' : 'bg-green-100 text-green-600'}`}><Icon name="chart" size={16} /></span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-semibold text-gray-900">{t('advisor.pred', { severity: tSev(h.predicted_severity) })}</span>
+                        <span className="block text-xs text-gray-500">{t('advisor.confidencePct', { pct: pct(h.confidence) })}</span>
+                      </span>
+                      <span className="text-xs text-gray-400 shrink-0">{fmt.isoDate(h.date)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
         )}
 
-        {result.description && (
-          <div className="bg-gray-50 p-3 rounded-xl mb-4">
-            <p className="text-xs text-gray-500">Your description:</p>
-            <p className="text-sm text-gray-700">{result.description}</p>
+        {/* Educational resources */}
+        <section className={`${card} fit-card shrink-0`} aria-labelledby="edu-h">
+          <CardHeader id="edu-h" icon="book" title={t('advisor.edu')} subtitle={t('advisor.eduSub')}
+            right={<button onClick={() => onTabChange && onTabChange('learn')} className="shrink-0 text-xs font-semibold text-brand-700 hover:underline">{t('advisor.viewAll')}</button>} />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            {articles.map((a, i) => (
+              <button key={a.id} onClick={() => onTabChange && onTabChange('learn')}
+                className="flex items-center gap-2 p-1.5 pr-2 rounded-xl border border-brand-100/70 bg-white hover:bg-brand-50/50 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
+                <img src={resourceImages[i]} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" />
+                <span className="flex-1 min-w-0 text-[11px] font-semibold text-gray-900 leading-[1.2] break-words">{t(`articles.${a.id}.title`, { defaultValue: a.title })}</span>
+              </button>
+            ))}
           </div>
-        )}
-
-        <div className="flex gap-3">
-          <button onClick={handleReset} className="flex-1 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600">New Analysis</button>
-          <button onClick={() => { handleReset(); setStarted(false) }} className="flex-1 py-2 border border-gray-300 rounded-lg text-sm">Done</button>
-        </div>
+        </section>
       </div>
-    )
-  }
 
-  // Input state
-  return (
-    <div className="glass-card p-6">
-      <h3 className="text-lg font-bold text-brand-800 mb-2">AI Symptom Advisor</h3>
-      <p className="text-sm text-gray-500 mb-4">Tell us what you're experiencing, and our AI will provide personalized guidance</p>
-
-      {/* Cold start: not enough data to predict */}
-      {!loadingContext && userContext && !userContext.canPredict && (
-        <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4 mb-4">
-          <p className="text-sm font-semibold text-yellow-800">Not enough data for a prediction yet</p>
-          <p className="text-xs text-yellow-700 mt-1">
-            The model needs your cycle phase and recent sleep/stress to personalise a result.
-            Log at least one cycle or one mood check-in, then come back.
-          </p>
-          <p className="text-xs text-yellow-600 mt-2">
-            Without this, a prediction would be based on assumed values rather than your data.
-          </p>
-        </div>
-      )}
-
-      {/* Using averages because today is not logged */}
-      {!loadingContext && userContext?.usingAverage && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
-          <p className="text-xs text-blue-700">
-            No mood logged today - using your <strong>{userContext.daysLogged}-day average</strong>
-            {' '}(sleep {userContext.sleepHours}/10, stress {userContext.stressLevel}/10).
-            Log today's mood for a more accurate result.
-          </p>
-        </div>
-      )}
-
-      {/* Show auto-detected context */}
-      {!loadingContext && userContext && (userContext.hasCycleData || userContext.hasMoodData) && (
-        <div className="bg-blue-50 rounded-xl p-3 mb-4">
-          <p className="text-xs font-semibold text-blue-700 mb-1">📊 Auto-detected from your data:</p>
-          <div className="flex flex-wrap gap-2">
-            {userContext.hasCycleData && (
-              <span className="text-xs bg-white px-2 py-1 rounded-full text-blue-700">Phase: {userContext.phase} (Day {userContext.dayOfCycle})</span>
-            )}
-            {userContext.hasMoodData && (
-              <>
-                <span className="text-xs bg-white px-2 py-1 rounded-full text-blue-700">Sleep: {userContext.sleepHours}/10</span>
-                <span className="text-xs bg-white px-2 py-1 rounded-full text-blue-700">Stress: {userContext.stressLevel}/10</span>
-                <span className="text-xs bg-white px-2 py-1 rounded-full text-blue-700">Energy: {userContext.energyLevel}/10</span>
-              </>
-            )}
+      {/* ---------------- Right column ---------------- */}
+      <div className="flex flex-col gap-3 fit-gap min-w-0 xl:min-h-0">
+        <section className={`${card} fit-card shrink-0`} aria-labelledby="insight-h">
+          <CardHeader id="insight-h" icon="bulb" title={t('advisor.todaysInsight')} right={<span className="text-[11px] text-gray-500 pt-1 whitespace-nowrap">{todayLabel}</span>} />
+          <div className={`rounded-xl p-3 flex items-start gap-3 ${cannotPredict ? 'bg-yellow-50' : 'bg-brand-50/80'}`}>
+            <span className="fit-deco shrink-0 w-10 h-10 rounded-full bg-white text-brand-500 flex items-center justify-center"><Icon name="heart" size={20} /></span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900">{insight.title}</p>
+              <p className="text-xs text-gray-600 mt-0.5">{insight.text}{insight.englishOnly && <EnglishOnly />}</p>
+            </div>
           </div>
-          <p className="text-xs text-blue-500 mt-1">This data will be used to personalize your prediction</p>
-        </div>
-      )}
+        </section>
 
-      <p className="text-sm font-semibold text-brand-600 mb-2">Quick Select Common Symptoms</p>
-      <div className="flex flex-wrap gap-2 mb-4">
-        {commonSymptoms.map(s => (
-          <button key={s} onClick={() => toggleSymptom(s)}
-            className={`px-3 py-1.5 rounded-full text-sm border transition ${
-              selectedSymptoms.includes(s) ? 'bg-brand-100 border-brand-400 text-brand-700 font-medium' : 'border-pink-200 text-brand-600 hover:bg-pink-50'
-            }`}>{s}</button>
-        ))}
+        <section className={`${card} fit-card shrink-0`} aria-labelledby="pred-h">
+          <div className="flex items-center gap-3">
+            <span className="fit-deco shrink-0 w-12 h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center"><Icon name="chart" size={24} /></span>
+            <div className="flex-1 min-w-0">
+              <h2 id="pred-h" className="text-sm font-semibold text-gray-900">{t('advisor.predTitle')}</h2>
+              <p className="font-display text-xl font-bold text-gray-900 leading-tight">{latest ? tSev(latest.severity) : t('advisor.notAvailable')}</p>
+              <p className="text-xs text-gray-500">{latest ? t('advisor.confWhen', { pct: pct(latest.confidence), when: latest.when }) : t('advisor.predHint')}</p>
+            </div>
+            <button onClick={focusInput} aria-label={t('advisor.describe')} className="shrink-0 p-1.5 text-gray-400 hover:text-brand-700"><Icon name="chevron" size={18} /></button>
+          </div>
+        </section>
+
+        <section className={`${card} fit-card flex flex-col xl:flex-1 xl:min-h-0`} aria-labelledby="tips-h">
+          <CardHeader id="tips-h" icon="leaf" title={t('advisor.tips')} right={<button onClick={() => onTabChange && onTabChange('learn')} className="shrink-0 text-xs font-semibold text-brand-700 hover:underline pt-1">{t('advisor.viewAll')}</button>} />
+          <ul className="sym-tips grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2 xl:flex-1 xl:min-h-0 xl:overflow-y-auto pr-0.5">
+            {wellnessTips.map(tip => (
+              <li key={tip.id} className="flex items-center gap-3 p-1.5 rounded-xl border border-brand-100/70 bg-white">
+                <img src={tip.img} alt="" className="sym-tip-img rounded-lg object-cover shrink-0" />
+                <div className="min-w-0">
+                  <p className="sym-tip-title font-semibold text-gray-900">{t(`advisor.tip.${tip.id}.title`)}</p>
+                  <p className="sym-tip-desc text-gray-500">{t(`advisor.tip.${tip.id}.text`)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
 
-      {selectedSymptoms.length > 0 && (
-        <p className="text-xs text-gray-500 mb-2">Selected: {selectedSymptoms.join(', ')}</p>
-      )}
-
-      <p className="text-sm font-semibold text-brand-600 mb-2">Describe Your Symptoms</p>
-      <textarea value={description} onChange={e => setDescription(e.target.value)}
-        placeholder="Describe what you're experiencing... (e.g., headache, fatigue, cramps)"
-        className="w-full border border-gray-200 rounded-xl p-4 text-sm mb-4" rows={4} />
-
-      {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
-
-      <div className="flex gap-3">
-        <button onClick={handleGetAdvice} disabled={loading || !userContext?.canPredict}
-          className="flex-1 py-3 bg-brand-500 text-white rounded-lg font-medium hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed">
-          {loading ? 'Analyzing...' : !userContext?.canPredict ? 'Log data to enable' : 'Get AI Advice'}
-        </button>
-        <button onClick={() => { handleReset(); setStarted(false) }}
-          className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200">Cancel</button>
-      </div>
+      <VoiceAssistant open={voiceOpen} onClose={() => setVoiceOpen(false)} />
     </div>
   )
 }

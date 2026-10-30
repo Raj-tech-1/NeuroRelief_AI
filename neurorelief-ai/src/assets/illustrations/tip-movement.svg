@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FDE3D4"/><stop offset=".6" stop-color="#F7B79A"/><stop offset="1" stop-color="#E98F80"/></linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#FFF2C6"/><stop offset="1" stop-color="#FFF2C6" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="120" height="120" rx="14" fill="url(#sky)"/>
+  <circle cx="60" cy="70" r="42" fill="url(#glow)"/>
+  <circle cx="60" cy="70" r="20" fill="#FFE9B8"/>
+  <path d="M0 96c20-8 40-10 60-6s40 2 60-4v34H0z" fill="#B95F7C" opacity=".55"/>
+  <circle cx="60" cy="58" r="7" fill="#6B2A4F"/>
+  <path d="M60 66c-9 0-14 7-14 17l-10 10c-3 3-1 7 4 7h40c5 0 7-4 4-7L74 83c0-10-5-17-14-17z" fill="#6B2A4F"/>
+  <path d="M46 78c-6 2-9 6-10 11M74 78c6 2 9 6 10 11" stroke="#6B2A4F" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <path d="M0 104h120v16H0z" fill="#8E3F63" opacity=".6"/>
+</svg>

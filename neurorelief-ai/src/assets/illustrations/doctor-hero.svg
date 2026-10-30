@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 260">
+  <defs>
+    <linearGradient id="leafA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBD3E2"/><stop offset="1" stop-color="#F4A9C6"/></linearGradient>
+    <linearGradient id="leafB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FCE1EC"/><stop offset="1" stop-color="#F7BBD2"/></linearGradient>
+  </defs>
+  <g opacity=".9">
+    <path d="M28 214C8 172 18 120 60 88C82 130 72 182 28 214z" fill="url(#leafA)"/>
+    <path d="M58 236C52 194 74 152 112 136C122 178 102 214 58 236z" fill="url(#leafB)"/>
+    <path d="M218 204C238 162 228 114 190 88C166 126 176 172 218 204z" fill="url(#leafA)"/>
+    <path d="M186 238C192 196 174 160 140 144C128 180 148 218 186 238z" fill="url(#leafB)"/>
+    <path d="M120 40C108 20 112 6 124 0C134 14 132 30 120 40z" fill="url(#leafB)" opacity=".7"/>
+  </g>
+  <path d="M70 112C62 60 90 30 122 30C156 30 182 60 174 114C172 152 184 182 192 208H52C62 182 72 152 70 112z" fill="#4A2432"/>
+  <path d="M44 260V222C44 196 70 178 100 172H144C172 178 198 196 198 222V260z" fill="#FFFFFF"/>
+  <path d="M100 172L122 216L144 172C134 167 110 167 100 172z" fill="#F277A9"/>
+  <path d="M108 148H136V176C130 186 114 186 108 176z" fill="#EBC3A5"/>
+  <ellipse cx="122" cy="108" rx="38" ry="46" fill="#F2CDB0"/>
+  <path d="M84 106C84 66 106 52 124 52C146 52 162 68 160 102C150 84 134 76 112 78C100 80 90 92 84 106z" fill="#4A2432"/>
+  <path d="M104 113c4 3 8 3 12 0M130 113c4 3 8 3 12 0" stroke="#4A2432" stroke-width="2.400" fill="none" stroke-linecap="round"/>
+  <path d="M102 102c5-3 10-3 14-1M130 101c4-2 9-2 14 1" stroke="#4A2432" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M123 117c-2 6-3 9 1 9" stroke="#D9A98A" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M111 134c6 8 20 8 26 0c-6 3-20 3-26 0z" fill="#D9566F"/>
+  <circle cx="100" cy="124" r="6" fill="#F5A9A9" opacity=".45"/>
+  <circle cx="146" cy="124" r="6" fill="#F5A9A9" opacity=".45"/>
+  <path d="M94 176c-8 24 4 46 28 48M150 176c8 24-4 46-28 48" stroke="#6B7A89" stroke-width="3.500" fill="none" stroke-linecap="round"/>
+  <circle cx="122" cy="228" r="7" fill="#A9B6C2" stroke="#6B7A89" stroke-width="2"/>
+  <path d="M100 172L88 236M144 172L156 236" stroke="#E6D9E1" stroke-width="2"/>
+</svg>

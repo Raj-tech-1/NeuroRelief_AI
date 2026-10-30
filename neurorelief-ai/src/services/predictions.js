@@ -13,8 +13,9 @@ function getToken() {
 
 export async function getPainPrediction(userFeatures) {
   const token = getToken()
+  let res
   try {
-    const res = await fetch(`${BASE_URL}/predict`, {
+    res = await fetch(`${BASE_URL}/predict`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -38,30 +39,50 @@ export async function getPainPrediction(userFeatures) {
       })
     })
 
-    if (!res.ok) throw new Error('Prediction request failed')
-    return await res.json()
-
   } catch (err) {
-    console.error('ML prediction failed, using fallback:', err.message)
-    // Fallback if backend/ML is down
-    const { stress_level = 5, sleep_hours = 7, cycle_day = 14 } = userFeatures || {}
-    let severity = 2
-    if (cycle_day <= 5) severity += 3
-    if (sleep_hours < 6) severity += 2
-    if (stress_level > 7) severity += 2
-    severity = Math.min(10, Math.max(0, severity))
-
-    return {
-      predicted_severity: severity <= 3 ? 'Low' : severity <= 6 ? 'Moderate' : 'High',
-      severity_score: severity,
-      confidence: 0.5,
-      risk_level: severity <= 3 ? 'low' : severity <= 6 ? 'moderate' : 'high',
-      recommended_tens_intensity: Math.min(100, severity * 12),
-      recommended_tens_frequency: severity > 5 ? 100 : 50,
-      recommended_heat_temp: 38 + Math.min(4, severity * 0.4),
-      recommendation: 'Backend unavailable — using fallback prediction.'
-    }
+    console.error('Prediction request failed:', err.message)
+    throw new PredictionError('Could not reach the prediction service. Check that the server is running and try again.', undefined, 'network')
   }
+
+  if (!res.ok) {
+    console.error('Prediction request failed with HTTP', res.status)
+    throw new PredictionError(
+      res.status === 401 || res.status === 403
+        ? 'Your session has expired. Please sign in again.'
+        : 'The prediction service is unavailable right now. No prediction was made — please try again later.',
+      res.status,
+      res.status === 401 || res.status === 403 ? 'auth' : 'unavailable'
+    )
+  }
+
+  let data
+  try { data = await res.json() } catch { data = null }
+  if (!data || !data.predicted_severity || data.probabilities == null) {
+    throw new PredictionError('The prediction service returned an unexpected response. No prediction was made.', undefined, 'badResponse')
+  }
+  return data
+}
+
+export class PredictionError extends Error {
+  // `code` ('network' | 'auth' | 'unavailable' | 'badResponse') lets the UI show a translated message
+  constructor(message, status, code) {
+    super(message)
+    this.name = 'PredictionError'
+    this.status = status
+    this.code = code
+  }
+}
+
+// Only a prediction produced by the real model (it carries `probabilities`) may drive the Device Panel
+export function readStoredPrediction() {
+  try {
+    const raw = localStorage.getItem('neurorelief_last_prediction')
+    if (!raw) return null
+    const p = JSON.parse(raw)
+    if (p && p.probabilities != null && p.predicted_severity) return p
+  } catch { /* fall through and clear */ }
+  localStorage.removeItem('neurorelief_last_prediction')
+  return null
 }
 
 export async function getWellnessForecast(userId, days = 7) {

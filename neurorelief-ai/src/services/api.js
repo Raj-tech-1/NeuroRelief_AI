@@ -272,8 +272,114 @@ export async function getPastScans(userId) {
   return res.json()
 }
 
-// ─── Reports ─────────────────────────────────────────
+// ─── Doctor workflow (appointment requests) ──────────
+// Identity and role always come from the server-verified token, never from these arguments.
+async function doctorRequest(method, path, body) {
+  let res
+  try {
+    res = await fetch(`${BASE_URL}/doctors${path}`, {
+      method, headers: headers(), body: body ? JSON.stringify(body) : undefined
+    })
+  } catch {
+    throw new Error('Could not reach the server. Please check your connection and try again.')
+  }
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
+  return data
+}
+
+export const getDoctorProfile = () => doctorRequest('GET', '/me')
+export const getDoctorRequests = () => doctorRequest('GET', '/requests')
+export const updateRequestStatus = (id, status) => doctorRequest('PATCH', `/requests/${id}`, { status })
+export const markRequestSeen = id => doctorRequest('POST', `/requests/${id}/seen`)
+export const markAllRequestsSeen = () => doctorRequest('POST', '/requests/seen')
+export const getMyBookings = () => doctorRequest('GET', '/bookings')
+export const requestAppointment = body => doctorRequest('POST', '/book', body)
+export const cancelBooking = id => doctorRequest('POST', `/bookings/${id}/cancel`)
+
+// ─── Prediction history (for the Overview "Latest Pain Prediction") ───
+export async function getPredictionHistory() {
+  const res = await fetch(`${BASE_URL}/predict/history`, { headers: headers() })
+  const data = await res.json()
+  return Array.isArray(data) ? data : []
+}
+
+// ─── Report Audit (patient side; every rule is enforced by the backend) ───
+// Errors carry .status (HTTP) and .code (the backend's machine code, e.g. 'NO_DATA'); a network failure has code 'network'.
+async function reportRequest(method, path, body) {
+  let res
+  try {
+    res = await fetch(`${BASE_URL}/reports${path}`, { method, headers: headers(), body: body ? JSON.stringify(body) : undefined })
+  } catch {
+    const err = new Error('network'); err.code = 'network'; throw err
+  }
+  let data = null
+  try { data = await res.json() } catch { /* non-JSON body (e.g. a server without these routes) */ }
+  if (!res.ok) {
+    const err = new Error(data?.error || `Request failed (${res.status})`)
+    err.status = res.status; err.code = data?.code || null
+    throw err
+  }
+  return data
+}
+export const getReportFeatureStatus = () => reportRequest('GET', '/status')
+export const previewReport = body => reportRequest('POST', '/preview', body)
+export const saveReport = body => reportRequest('POST', '/', body)
+export const getMyReports = () => reportRequest('GET', '/')
+export const getMyReport = id => reportRequest('GET', `/${id}`)
+export const getReportShare = id => reportRequest('GET', `/shares/${id}`)
+export const getReportActivity = id => reportRequest('GET', `/${id}/activity`)
+// Sharing (the backend re-checks ownership, the confirmed appointment and the consent version on every call)
+export const getReportConsent = () => reportRequest('GET', '/consent')
+export const getEligibleDoctors = () => reportRequest('GET', '/eligible-doctors')
+export const shareReport = (reportId, body) => reportRequest('POST', `/${reportId}/shares`, body)
+export const revokeReportShare = shareId => reportRequest('POST', `/shares/${shareId}/revoke`)
+// Uploaded PDF reports: the browser sends the file as base64 JSON; the backend re-validates everything (type, size, content).
+export const uploadReportPdf = body => reportRequest('POST', '/uploads', body)
+async function reportBlob(path) {
+  let res
+  try { res = await fetch(`${BASE_URL}/reports${path}`, { headers: headers() }) } catch { const err = new Error('network'); err.code = 'network'; throw err }
+  if (!res.ok) {
+    let data = null
+    try { data = await res.json() } catch { /* not JSON */ }
+    const err = new Error(data?.error || `Request failed (${res.status})`)
+    err.status = res.status; err.code = data?.code || null
+    throw err
+  }
+  return res.blob()
+}
+// The PDF is fetched with the Authorization header (never a token in a URL) and handled as a blob.
+export const getMyReportFile = id => reportBlob(`/${id}/file`)
+export const getDoctorReportFile = shareId => reportBlob(`/inbox/${shareId}/file`)
+// Doctor side (the backend only answers for shares addressed to the signed-in doctor, with a confirmed appointment)
+export const getDoctorReportSummary = () => reportRequest('GET', '/inbox/summary')
+export const getDoctorReportInbox = () => reportRequest('GET', '/inbox')
+export const getDoctorReportShare = shareId => reportRequest('GET', `/inbox/${shareId}`)
+export const setDoctorReportStatus = (shareId, body) => reportRequest('POST', `/inbox/${shareId}/status`, body)
+export const addDoctorReportNote = (shareId, note) => reportRequest('POST', `/inbox/${shareId}/notes`, { note })
+
+// ─── Reports (old stubs, unused) ─────────────────────
 export async function getReports(userId) { return [] }
 export async function uploadReport(userId, file) {
   return { report_id: 'rpt_' + Date.now(), fileName: file.name }
 }
+
+// ─── Voice / chat assistant (backend proxies Gemini; the key never reaches the browser) ───
+async function assistantRequest(method, path, body) {
+  let res
+  try {
+    res = await fetch(`${BASE_URL}/assistant${path}`, { method, headers: headers(), body: body ? JSON.stringify(body) : undefined })
+  } catch {
+    const err = new Error('network'); err.code = 'network'; throw err
+  }
+  let data = null
+  try { data = await res.json() } catch { /* non-JSON error body */ }
+  if (!res.ok) {
+    const err = new Error('assistant_error')
+    err.code = res.status === 401 || res.status === 403 ? 'session' : (data && data.error) || 'generic'
+    throw err
+  }
+  return data
+}
+export const getAssistantStatus = () => assistantRequest('GET', '/status')
+export const sendAssistantMessage = (message, history, lang) => assistantRequest('POST', '/chat', { message, history, lang })

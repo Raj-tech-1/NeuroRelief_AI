@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useFormat } from '../../i18n/format'
+import { readStoredPrediction } from '../../services/predictions'
+import { Icon } from '../../components/icons'
 
 const BASE_URL = 'http://localhost:8000/api'
 function getToken() {
@@ -8,6 +12,8 @@ function getToken() {
 }
 
 export default function DevicePanel() {
+  const { t } = useTranslation()
+  const fmt = useFormat()
   const [calibration, setCalibration] = useState(null)
   // Device state
   const [connected, setConnected] = useState(false)
@@ -39,8 +45,8 @@ export default function DevicePanel() {
 
   useEffect(() => {
     // Load last prediction from localStorage
-    const pred = localStorage.getItem('neurorelief_last_prediction')
-    if (pred) setLastPrediction(JSON.parse(pred))
+    const pred = readStoredPrediction()
+    if (pred) setLastPrediction(pred)
 
     // Load personal calibration status
     fetch(`${BASE_URL}/predict/calibration`, {
@@ -122,6 +128,7 @@ export default function DevicePanel() {
   function saveSession(afterPain) {
     const session = {
       date: new Date().toLocaleString(),
+      ts: Date.now(),
       duration: formatTime(sessionSeconds),
       durationSeconds: sessionSeconds,
       tensIntensity,
@@ -157,234 +164,255 @@ export default function DevicePanel() {
     setSessionSeconds(0)
   }
 
+  const card = 'bg-white rounded-2xl border border-brand-100 shadow-[0_2px_10px_rgba(157,47,131,0.06)]'
+  const rating = painAfter !== null && !sessionActive
+  const painLocked = sessionActive || rating
+  const settingsRow = (
+    <div className="grid grid-cols-3 gap-1.5">
+      {[
+        ['bolt', `${tensIntensity}%`, t('device.intensityShort'), 'text-amber-600 bg-amber-50'],
+        ['chart', `${tensFrequency} Hz`, t('device.frequencyShort'), 'text-sky-600 bg-sky-50'],
+        ['drop', `${heatTemp}°C`, t('device.temperatureShort'), 'text-rose-600 bg-rose-50'],
+      ].map(([ic, v, l, tone]) => (
+        <div key={l} className={`rounded-lg px-2 py-1 flex items-center gap-1.5 ${tone}`}>
+          <Icon name={ic} size={16} className="shrink-0" />
+          <div className="leading-tight min-w-0">
+            <p className="text-sm font-bold text-gray-900">{v}</p>
+            <p className="text-[11px] text-gray-500">{l}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Left: Device Control */}
-        <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">📱</span>
-              <div>
-                <h3 className="font-bold text-gray-900">Wearable Device Control</h3>
-                <p className="text-sm text-brand-600">NeuroRelief TENS + Heat Band</p>
-              </div>
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,11fr)_minmax(0,9fr)] gap-3 dev-gap xl:h-full xl:min-h-0">
+      {/* ---------------- Left column ---------------- */}
+      <div className="flex flex-col gap-2.5 dev-gap min-w-0 xl:min-h-0">
+        {/* Device status */}
+        <section className={`${card} dev-pad p-3 shrink-0 bg-gradient-to-r from-brand-50 via-white to-white`} aria-label={t('device.section')}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="shrink-0 w-11 h-11 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center"><Icon name="device" size={22} /></span>
+            <div className="min-w-0 mr-auto flex-1 basis-56">
+              <h2 className="font-display text-lg font-bold text-gray-900 leading-tight">NeuroRelief Band v1</h2>
+              <p className="text-xs text-gray-500">{t('device.bandSub')}</p>
             </div>
             {connected && (
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${battery > 20 ? 'bg-green-400' : 'bg-red-400'} ${sessionActive ? 'animate-pulse' : ''}`} />
-                <span className="text-xs text-gray-500">🔋 {battery}%</span>
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600" aria-label={t('device.battery', { n: battery })}>
+                <span className={`w-2.5 h-2.5 rounded-full ${battery > 20 ? 'bg-green-400' : 'bg-red-400'} ${sessionActive ? 'animate-pulse' : ''}`} />
+                <Icon name="battery" size={20} className="text-green-600" /> {battery}%
+              </span>
+            )}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${connected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+              <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              {connected ? t('device.connected') : t('device.notConnected')}
+            </span>
+            {connected ? (
+              <button onClick={handleDisconnect} className="text-xs text-red-500 hover:text-red-700 font-medium">{t('device.disconnect')}</button>
+            ) : (
+              <button onClick={handleConnect} disabled={connecting}
+                className="px-5 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-semibold disabled:opacity-60 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300">
+                {connecting ? t('device.connecting') : t('device.connect')}
+              </button>
+            )}
+          </div>
+        </section>
+
+        {!connected ? (
+          <section className={`${card} flex-1 min-h-0 flex flex-col items-center justify-center text-center p-6`}>
+            <span className="w-16 h-16 rounded-full bg-brand-50 text-brand-500 flex items-center justify-center mb-3"><Icon name="device" size={30} /></span>
+            <p className="font-display text-lg font-bold text-gray-900">{t('device.noDevice')}</p>
+            <p className="text-sm text-gray-500 mt-1 max-w-sm">{t('device.noDeviceText')}</p>
+          </section>
+        ) : (
+          <>
+            {/* AI recommended settings */}
+            <section className={`${card} dev-pad px-3 py-2 shrink-0`} aria-label={t('device.aiTitle')}>
+              {lastPrediction ? (
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="mr-auto min-w-0">
+                    <h3 className="font-bold text-gray-900 text-sm leading-tight">{t('device.aiTitle')}</h3>
+                    <span className="inline-block mt-0.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">{t('advisor.pred', { severity: t(`severity.${lastPrediction.predicted_severity}`, { defaultValue: lastPrediction.predicted_severity }) })}</span>
+                  </div>
+                  <p className="text-sm text-gray-700 font-medium">
+                    {lastPrediction.recommended_tens_intensity}% · {lastPrediction.recommended_tens_frequency} Hz · {lastPrediction.recommended_heat_temp}°C
+                  </p>
+                  <button onClick={applyRecommended}
+                    className="px-4 py-2 bg-gradient-to-r from-brand-500 to-brand-700 text-white rounded-lg text-sm font-semibold inline-flex items-center gap-2 hover:opacity-95 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300">
+                    <Icon name="bolt" size={16} /> {t('device.apply')}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 py-1"><span className="font-semibold text-gray-700">{t('device.aiTitle')}</span> — {t('device.aiNone')}</p>
+              )}
+            </section>
+
+            {/* Therapy controls */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 dev-gap xl:flex-[1_0_auto]" aria-label={t('device.controls')}>
+              {/* TENS */}
+              <div className="rounded-2xl border border-purple-100 bg-purple-50/60 dev-pad p-3 flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-sm font-bold text-purple-900 inline-flex items-center gap-1.5"><Icon name="bolt" size={16} className="text-purple-600" /> {t('device.tens')}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${tensActive ? 'bg-purple-200 text-purple-800' : 'bg-gray-200 text-gray-600'}`}>
+                    {tensActive ? t('device.active') : t('device.inactive')}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-semibold text-gray-800"><label htmlFor="tens-int">{t('device.intensity', { n: tensIntensity })}</label></div>
+                <input id="tens-int" type="range" min="0" max="100" value={tensIntensity} onChange={e => setTensIntensity(Number(e.target.value))}
+                  className="w-full h-5" style={{ accentColor: '#7C3AED' }} />
+                <div className="flex justify-between text-[11px] text-gray-400"><span>{t('device.off')}</span><span>{t('device.low')}</span><span>{t('device.medium')}</span><span>{t('device.high')}</span><span>{t('device.max')}</span></div>
+
+                <label htmlFor="tens-freq" className="text-sm font-semibold text-gray-800 mt-1.5 block">{t('device.frequency', { n: tensFrequency })}</label>
+                <input id="tens-freq" type="range" min="2" max="150" value={tensFrequency} onChange={e => setTensFrequency(Number(e.target.value))}
+                  className="w-full h-5" style={{ accentColor: '#7C3AED' }} />
+                <div className="flex justify-between text-[11px] text-gray-400"><span>2 Hz</span><span>{t('device.lowEndorphins')}</span><span>150 Hz</span></div>
               </div>
+
+              {/* Heat */}
+              <div className="rounded-2xl border border-orange-100 bg-orange-50/60 dev-pad p-3 flex flex-col">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-sm font-bold text-orange-900 inline-flex items-center gap-1.5"><Icon name="drop" size={16} className="text-orange-600" /> {t('device.heat')}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${heatActive ? 'bg-orange-200 text-orange-800' : 'bg-gray-200 text-gray-600'}`}>
+                    {heatActive ? `${heatTemp}°C` : t('device.inactive')}
+                  </span>
+                </div>
+                <label htmlFor="heat-temp" className="text-sm font-semibold text-gray-800">{t('device.temperature', { n: heatTemp })}</label>
+                <input id="heat-temp" type="range" min="38" max="42" step="0.5" value={heatTemp} onChange={e => setHeatTemp(Number(e.target.value))}
+                  className="w-full h-5" style={{ accentColor: '#EA580C' }} />
+                <div className="flex justify-between text-[11px] text-gray-400"><span>{t('device.warm')}</span><span>40°C</span><span>{t('device.maxSafe')}</span></div>
+                <p className="mt-auto pt-1.5 text-[11px] text-orange-800/80 bg-orange-100/60 rounded-lg px-2 py-1.5 dev-note">{t('device.heatNote')}</p>
+              </div>
+            </section>
+
+            {/* Current pain level */}
+            <section className={`${card} dev-pad px-3 py-2 shrink-0 ${painLocked ? 'opacity-70' : ''}`} aria-label={t('device.painLevel')}>
+              <div className="flex items-center justify-between">
+                <label htmlFor="pain-before" className="text-sm font-bold text-gray-900 inline-flex items-center gap-1.5"><Icon name="chart" size={16} className="text-brand-600" /> {t('device.painLevel')}</label>
+                <span className="text-sm font-bold text-gray-900">{painBefore} / 10</span>
+              </div>
+              <input id="pain-before" type="range" min="0" max="10" value={painBefore} disabled={painLocked} onChange={e => setPainBefore(Number(e.target.value))}
+                className="w-full h-5" style={{ accentColor: '#C03B8F' }} />
+              <div className="flex justify-between text-[11px] text-gray-400"><span>{t('device.noPain')}</span><span>{t('device.severePain')}</span></div>
+            </section>
+
+            {/* Session control */}
+            {sessionActive ? (
+              <button onClick={handleStopSession}
+                className="shrink-0 w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-semibold text-base inline-flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-red-300">
+                <span className="w-3 h-3 bg-white rounded-sm" /> {t('device.stop')}
+              </button>
+            ) : rating ? (
+              <p className="shrink-0 w-full py-3 text-center rounded-xl bg-brand-50 text-brand-700 text-sm font-medium">{t('device.rateHint')}</p>
+            ) : (
+              <button onClick={handleStartSession}
+                className="shrink-0 w-full py-3 bg-gradient-to-r from-brand-500 to-brand-700 hover:opacity-95 text-white rounded-xl font-semibold text-base inline-flex items-center justify-center gap-2 shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300">
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2l11 6-11 6z" fill="currentColor" /></svg> {t('device.start')}
+              </button>
+            )}
+            <p className="shrink-0 text-[11px] text-gray-500 text-center -mt-1 flex items-center justify-center gap-1.5">
+              <Icon name="check" size={12} className="text-brand-600" /> {t('device.safety')}
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* ---------------- Right column ---------------- */}
+      <div className="flex flex-col gap-2.5 dev-gap min-w-0 xl:min-h-0">
+        {/* Session status */}
+        <section className={`${card} dev-pad p-3 shrink-0`} aria-label={t('device.sessionStatus')}>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${sessionActive ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+              <div className="leading-tight">
+                <h3 className="font-bold text-gray-900">{t('device.sessionStatus')}</h3>
+                <p className="text-xs text-gray-500">
+                  {sessionActive ? t('device.sessionActive') : rating ? t('device.sessionFinished') : connected ? t('device.noSession') : t('device.connectToStart')}
+                </p>
+              </div>
+            </div>
+            <span className="text-2xl font-bold font-mono text-brand-800" aria-live="off">{formatTime(sessionSeconds)}</span>
+          </div>
+          {rating ? (
+            <div>
+              <div className="flex gap-1 justify-center flex-wrap mb-1.5">
+                {Array.from({ length: 11 }).map((_, i) => (
+                  <button key={i} onClick={() => saveSession(i)} aria-label={t('device.ratePain', { n: i })}
+                    className={`w-8 h-8 rounded-lg text-xs font-bold transition ${
+                      i <= 3 ? 'bg-green-100 hover:bg-green-300 text-green-800' :
+                      i <= 6 ? 'bg-yellow-100 hover:bg-yellow-300 text-yellow-800' :
+                      'bg-red-100 hover:bg-red-300 text-red-800'
+                    }`}>
+                    {i}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 text-center">{t('device.painBefore', { before: painBefore, time: formatTime(sessionSeconds) })}</p>
+            </div>
+          ) : settingsRow}
+        </section>
+
+        {/* Therapy history */}
+        <section className={`${card} dev-pad p-3 flex flex-col xl:flex-1 xl:min-h-0`} aria-label={t('device.history')}>
+          <div className="flex items-center justify-between mb-1.5 shrink-0">
+            <h3 className="font-bold text-gray-900 inline-flex items-center gap-2"><Icon name="history" size={18} className="text-brand-600" /> {t('device.history')}</h3>
+            {history.length > 0 && (
+              <button onClick={() => { setHistory([]); localStorage.removeItem('neurorelief_therapy_history') }}
+                className="text-xs text-red-500 hover:text-red-700 font-medium">{t('device.clearHistory')}</button>
             )}
           </div>
 
-          {!connected ? (
-            <div className="text-center py-8">
-              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-4xl">⌚</span>
-              </div>
-              <p className="text-gray-500 mb-4">No device connected</p>
-              <button onClick={handleConnect} disabled={connecting}
-                className="px-8 py-3 bg-brand-500 text-white rounded-lg font-medium hover:bg-brand-600 disabled:opacity-60">
-                {connecting ? 'Connecting...' : 'Connect Device'}
-              </button>
-              <p className="text-xs text-gray-400 mt-2">Simulated device for demonstration</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Connection status */}
-              <div className="flex items-center justify-between bg-green-50 p-3 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-sm font-medium text-green-700">NeuroRelief Band v1 — Connected</span>
-                </div>
-                <button onClick={handleDisconnect} className="text-xs text-red-500 hover:text-red-700">Disconnect</button>
-              </div>
-
-              {/* Auto-fill from AI */}
-              {lastPrediction && (
-                <button onClick={applyRecommended}
-                  className="w-full py-2.5 bg-purple-100 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-200 transition flex items-center justify-center gap-2">
-                  🎯 Apply AI Recommended Settings
-                  <span className="text-xs text-purple-500">({lastPrediction.predicted_severity} pain predicted)</span>
-                </button>
-              )}
-
-              {/* TENS Controls */}
-              <div className="bg-blue-50 p-4 rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold text-blue-800">⚡ TENS Stimulation</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${tensActive ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-600'}`}>
-                    {tensActive ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                <label className="text-xs text-gray-600">Intensity: {tensIntensity}%</label>
-                <input type="range" min="0" max="100" value={tensIntensity} onChange={e => setTensIntensity(Number(e.target.value))}
-                  className="w-full" style={{ accentColor: '#2563EB' }} />
-                <div className="flex justify-between text-xs text-gray-400"><span>Off</span><span>Low</span><span>Medium</span><span>High</span><span>Max</span></div>
-
-                <label className="text-xs text-gray-600 mt-2 block">Frequency: {tensFrequency} Hz</label>
-                <input type="range" min="2" max="150" value={tensFrequency} onChange={e => setTensFrequency(Number(e.target.value))}
-                  className="w-full" style={{ accentColor: '#2563EB' }} />
-                <div className="flex justify-between text-xs text-gray-400"><span>2 Hz</span><span>Low (endorphins)</span><span>150 Hz</span></div>
-              </div>
-
-              {/* Heat Controls */}
-              <div className="bg-orange-50 p-4 rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold text-orange-800">🌡️ Heat Therapy</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${heatActive ? 'bg-orange-200 text-orange-800' : 'bg-gray-200 text-gray-600'}`}>
-                    {heatActive ? `${heatTemp}°C` : 'Inactive'}
-                  </span>
-                </div>
-                <label className="text-xs text-gray-600">Temperature: {heatTemp}°C</label>
-                <input type="range" min="38" max="42" step="0.5" value={heatTemp} onChange={e => setHeatTemp(Number(e.target.value))}
-                  className="w-full" style={{ accentColor: '#EA580C' }} />
-                <div className="flex justify-between text-xs text-gray-400"><span>38°C (Warm)</span><span>40°C</span><span>42°C (Max safe)</span></div>
-              </div>
-
-              {/* Pain Before */}
-              {!sessionActive && painAfter === null && (
-                <div className="bg-gray-50 p-3 rounded-xl">
-                  <label className="text-xs text-gray-600">Current pain level: {painBefore}/10</label>
-                  <input type="range" min="0" max="10" value={painBefore} onChange={e => setPainBefore(Number(e.target.value))} className="w-full" />
-                </div>
-              )}
-
-              {/* Session Controls */}
-              {!sessionActive && painAfter === null && (
-                <button onClick={handleStartSession}
-                  className="w-full py-3 bg-brand-500 text-white rounded-xl font-semibold hover:bg-brand-600 text-lg">
-                  ▶ Start Therapy Session
-                </button>
-              )}
-
-              {sessionActive && (
-                <div className="bg-brand-50 p-4 rounded-xl text-center">
-                  <p className="text-xs text-brand-600 font-medium">Session Active</p>
-                  <p className="text-4xl font-bold text-brand-800 my-2 font-mono">{formatTime(sessionSeconds)}</p>
-                  <div className="flex gap-2 text-xs text-gray-500 justify-center mb-3">
-                    <span>⚡ {tensIntensity}%</span>
-                    <span>•</span>
-                    <span>{tensFrequency}Hz</span>
-                    <span>•</span>
-                    <span>🌡️ {heatTemp}°C</span>
-                  </div>
-                  <button onClick={handleStopSession}
-                    className="px-8 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600">
-                    ⏹ Stop Session
-                  </button>
-                </div>
-              )}
-
-              {/* Pain After Rating */}
-              {painAfter !== null && !sessionActive && (
-                <div className="bg-green-50 p-4 rounded-xl">
-                  <p className="text-sm font-semibold text-green-800 mb-2">Rate your pain now (after therapy):</p>
-                  <div className="flex gap-1 justify-center mb-3">
-                    {Array.from({ length: 11 }).map((_, i) => (
-                      <button key={i} onClick={() => saveSession(i)}
-                        className={`w-8 h-8 rounded-lg text-xs font-bold transition ${
-                          i <= 3 ? 'bg-green-100 hover:bg-green-300 text-green-800' :
-                          i <= 6 ? 'bg-yellow-100 hover:bg-yellow-300 text-yellow-800' :
-                          'bg-red-100 hover:bg-red-300 text-red-800'
-                        }`}>
-                        {i}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-500 text-center">Pain before: {painBefore}/10 • Session: {formatTime(sessionSeconds)}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right: Therapy History */}
-        <div className="glass-card p-6">
-          <h3 className="font-bold text-gray-900 mb-4">Therapy History</h3>
-
-          {/* ---- personal calibration status ---- */}
-          {calibration && (
-            calibration.active ? (
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 mb-4">
-                <p className="text-sm font-semibold text-purple-800">
-                  Personal calibration active
-                </p>
-                <p className="text-xs text-purple-600 mt-1">
-                  Across your last {calibration.sessions} sessions you reported pain
-                  {' '}<strong>{calibration.offset > 0 ? `${calibration.offset} higher` : `${Math.abs(calibration.offset)} lower`}</strong>
-                  {' '}than the model predicted, so your predictions are now shifted
-                  {' '}{calibration.offset > 0 ? 'up' : 'down'} to match you.
-                </p>
-              </div>
-            ) : (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-4">
-                <p className="text-xs text-gray-600">
-                  Personal calibration: <strong>{calibration.sessions || 0} of {calibration.needed || 5}</strong> sessions recorded.
-                  {' '}Rate your pain after each session to tune predictions to you.
-                </p>
-              </div>
-            )
-          )}
-
           {history.length === 0 ? (
-            <div className="text-center py-12">
-              <span className="text-4xl">📊</span>
-              <p className="text-gray-400 mt-2">No therapy sessions yet</p>
-              <p className="text-xs text-gray-400 mt-1">Complete a session to see your history</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-center py-6">
+              <span className="text-brand-300"><Icon name="chart" size={30} /></span>
+              <p className="text-gray-500 mt-1 text-sm">{t('device.noSessions')}</p>
+              <p className="text-xs text-gray-400">{t('device.noSessionsHint')}</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* Summary stats */}
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-purple-50 p-3 rounded-xl text-center">
-                  <p className="text-xs text-purple-600">Total Sessions</p>
-                  <p className="text-xl font-bold text-purple-800">{history.length}</p>
-                </div>
-                <div className="bg-green-50 p-3 rounded-xl text-center">
-                  <p className="text-xs text-green-600">Avg Improvement</p>
-                  <p className="text-xl font-bold text-green-800">
-                    {history.length > 0 ? (history.reduce((s, h) => s + (h.improvement || 0), 0) / history.length).toFixed(1) : 0}
-                  </p>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-xl text-center">
-                  <p className="text-xs text-blue-600">Total Time</p>
-                  <p className="text-xl font-bold text-blue-800">
-                    {Math.round(history.reduce((s, h) => s + (h.durationSeconds || 0), 0) / 60)}m
-                  </p>
-                </div>
+            <>
+              <div className="grid grid-cols-3 gap-1.5 mb-1.5 shrink-0 text-center">
+                <div className="bg-purple-50 rounded-lg py-1"><p className="text-[11px] text-purple-600 leading-tight">{t('device.totalSessions')}</p><p className="font-bold text-purple-800 leading-tight">{history.length}</p></div>
+                <div className="bg-green-50 rounded-lg py-1"><p className="text-[11px] text-green-600 leading-tight">{t('device.avgImprovement')}</p><p className="font-bold text-green-800 leading-tight">{(history.reduce((s, h) => s + (h.improvement || 0), 0) / history.length).toFixed(1)}</p></div>
+                <div className="bg-blue-50 rounded-lg py-1"><p className="text-[11px] text-blue-600 leading-tight">{t('device.totalTime')}</p><p className="font-bold text-blue-800 leading-tight">{t('device.minutes', { n: Math.round(history.reduce((s, h) => s + (h.durationSeconds || 0), 0) / 60) })}</p></div>
               </div>
-
-              {/* Session list */}
-              {history.map((session, i) => (
-                <div key={i} className="border border-gray-100 rounded-xl p-3">
-                  <div className="flex justify-between items-start mb-2">
-                    <p className="text-xs text-gray-400">{session.date}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      session.improvement > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {session.improvement > 0 ? `↓ ${session.improvement} pain` : 'No change'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-1">
-                      <span className="text-red-500 font-bold">{session.painBefore}</span>
-                      <span className="text-gray-400">→</span>
-                      <span className="text-green-500 font-bold">{session.painAfter}</span>
-                    </div>
-                    <span className="text-xs text-gray-400">⏱ {session.duration}</span>
-                    <span className="text-xs text-gray-400">⚡ {session.tensIntensity}%</span>
-                    <span className="text-xs text-gray-400">🌡️ {session.heatTemp}°C</span>
-                  </div>
-                </div>
-              ))}
-
-              <button onClick={() => { setHistory([]); localStorage.removeItem('neurorelief_therapy_history') }}
-                className="w-full py-2 text-xs text-red-500 hover:text-red-700">Clear History</button>
-            </div>
+              <div className="flex-1 min-h-0 overflow-auto max-h-64 xl:max-h-none">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-white text-gray-500 text-left">
+                    <tr><th className="font-medium py-1 pr-2">{t('device.colDate')}</th><th className="font-medium py-1 pr-2">{t('device.colDuration')}</th><th className="font-medium py-1 pr-2">{t('device.colPain')}</th><th className="font-medium py-1">{t('device.colSettings')}</th></tr>
+                  </thead>
+                  <tbody>
+                    {history.map((session, i) => (
+                      <tr key={i} className="border-t border-gray-100 text-gray-700">
+                        <td className="py-1.5 pr-2">{session.ts ? fmt.dateTime(session.ts) : session.date}</td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">{session.duration}</td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded-full font-medium ${session.improvement > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {session.painBefore} → {session.painAfter}
+                          </span>
+                        </td>
+                        <td className="py-1.5 whitespace-nowrap">{session.tensIntensity}% | {session.tensFrequency ?? '-'}Hz | {session.heatTemp}°C</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
-        </div>
+        </section>
+
+        {/* Personal calibration */}
+        {calibration && (
+          <section className={`${card} dev-pad px-3 py-2 shrink-0 short-hide`} aria-label={t('device.calSection')}>
+            {calibration.active ? (
+              <p className="text-xs text-purple-700">
+                {t(calibration.offset > 0 ? 'device.calActiveHigher' : 'device.calActiveLower', { sessions: calibration.sessions, offset: Math.abs(calibration.offset) })}
+              </p>
+            ) : (
+              <p className="text-xs text-gray-600">
+                {t('device.calInactive', { n: calibration.sessions || 0, needed: calibration.needed || 5 })}
+              </p>
+            )}
+          </section>
+        )}
       </div>
     </div>
   )

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:report-infra": "node --test tests/report-infra.test.mjs tests/report-phase3-prep.test.mjs tests/report-api.test.mjs tests/report-runner.test.mjs tests/report-upload.test.mjs"
   },
   "dependencies": {
     "express": "^4.19.2",

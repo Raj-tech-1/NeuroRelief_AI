@@ -9,6 +9,83 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Serif display font for dashboard headings */
+.font-display { font-family: Georgia, 'Times New Roman', serif; }
+
+/* Indian scripts: per-script Noto font (Google Fonts, with system fallbacks) and looser line heights
+   so stacked vowel signs are not clipped by Tailwind's tight leading utilities. */
+html[lang='hi'] body, html[lang='hi'] .font-display { font-family: 'Inter', 'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', system-ui, sans-serif; }
+html[lang='kn'] body, html[lang='kn'] .font-display { font-family: 'Inter', 'Noto Sans Kannada', 'Nirmala UI', 'Tunga', system-ui, sans-serif; }
+html[lang='ta'] body, html[lang='ta'] .font-display { font-family: 'Inter', 'Noto Sans Tamil', 'Nirmala UI', 'Latha', system-ui, sans-serif; }
+html[lang='te'] body, html[lang='te'] .font-display { font-family: 'Inter', 'Noto Sans Telugu', 'Nirmala UI', 'Gautami', system-ui, sans-serif; }
+html[lang='hi'], html[lang='kn'], html[lang='ta'], html[lang='te'] { line-height: 1.6; }
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .leading-none { line-height: 1.35; }
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .leading-tight { line-height: 1.4; }
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .leading-snug { line-height: 1.5; }
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .tracking-\[0\.2em\] { letter-spacing: 0; }
+/* Indian-language text is longer than English: 2x2 summary cards on laptop widths (1280-1535px) instead of 4 across,
+   and a 4-line clamp for the Cycle Insights description. English layout is unchanged. */
+@media (min-width: 1280px) and (max-width: 1535px) {
+  html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .indic-2col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .cycle-insight-text { -webkit-line-clamp: 4; }
+/* Symptom tiles: Indian-language labels can need two lines; let the tile grow (the grid scrolls internally) */
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .sym-tile { height: auto; min-height: 2.5rem; padding-block: 0.25rem; }
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .sym-tile > span { min-width: 0; flex: 1 1 auto; overflow-wrap: break-word; }
+@media (min-width: 1280px) {
+  html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .sym-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .sym-grid { grid-auto-rows: max-content; }
+html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .sym-t-chev { display: none; }   /* decorative; frees width for the label */
+@media (min-width: 1280px) and (max-height: 700px) {
+  html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .sym-tile { height: auto; min-height: 2.25rem; }
+}
+/* Kannada/Tamil/Telugu glyphs are wider than Latin; keep the Overview hero title to ~2 lines */
+html:is([lang='kn'], [lang='ta'], [lang='te']) .hero-title { font-size: 1.5rem; }
+@media (min-width: 768px) { html:is([lang='kn'], [lang='ta'], [lang='te']) .hero-title { font-size: 1.875rem; } }
+/* Sign-in hero: long Dravidian words must stay inside the 520px text column */
+html:is([lang='kn'], [lang='ta'], [lang='te']) .auth-hero { font-size: 1.875rem; }
+@media (min-width: 1024px) { html:is([lang='kn'], [lang='ta'], [lang='te']) .auth-hero { font-size: 2.25rem; } }
+
+/* AI Symptom Advisor: compact sizing that adapts to short desktop viewports */
+.sym-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem; }
+@media (min-width: 640px) { .sym-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) and (max-height: 700px) { .sym-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.sym-textarea { height: 88px; padding-top: 0.625rem; }
+.sym-tip-title { font-size: 0.875rem; line-height: 1.2; }
+.sym-tip-desc { font-size: 0.75rem; line-height: 1.3; }
+.fit-card { padding: 1rem; }
+.fit-tip-img { width: 2.5rem; height: 2.5rem; }
+@media (min-width: 1280px) and (max-height: 800px) { .fit-sub { display: none; } }
+@media (min-width: 1280px) and (max-height: 700px) { .fit-tipcard { display: none; } }
+.fit-hero { padding: clamp(0.75rem, 2.2vh, 1.5rem) 1.5rem; min-height: clamp(120px, 20vh, 190px); }
+@media (min-width: 1280px) and (max-height: 700px) {
+  .fit-hero { padding: 0.5rem 1.25rem; min-height: 96px; }
+  .fit-filters { padding: 0.5rem !important; }
+  .fit-filters label, .fit-filters button[type=submit] { min-height: 42px !important; }
+  .fit-dcard { padding: 0.375rem !important; gap: 0.25rem !important; }
+  .fit-dcard svg.rounded-xl { width: 44px; height: 44px; }
+}
+.fit-ico { width: 2.5rem; height: 2.5rem; }
+.sym-tile { height: 2.5rem; }
+.sym-tip-img { width: 3rem; height: 3rem; }
+@media (min-width: 1280px) and (max-height: 800px) {
+  .fit-card { padding: 0.75rem; }
+  .fit-ico { width: 2rem; height: 2rem; }
+  .fit-ico svg { width: 17px; height: 17px; }
+  .fit-hdr { margin-bottom: 0.5rem !important; }
+  .sym-textarea { height: 76px; }
+}
+@media (min-width: 1280px) and (max-height: 700px) {
+  .sym-tile { height: 2.25rem; }
+  .sym-tip-img { width: 2.5rem; height: 2.5rem; }
+  .fit-gap { gap: 0.5rem !important; }
+  .fit-tip-img { width: 2.25rem; height: 2.25rem; }
+  .fit-tips > * + * { margin-top: 0.25rem !important; }
+}
+@media (min-width: 1280px) and (max-height: 700px) { .short-hide { display: none !important; } }
+@media (min-width: 1280px) and (max-height: 700px) { .fit-ico, .fit-deco, .sym-t-ico, .sym-t-chev { display: none; } .sym-tips { gap: 0.25rem !important; } .sym-textarea { height: 66px; } .sym-tip-title { font-size: 0.8125rem; } .sym-tip-desc { font-size: 0.6875rem; line-height: 1.15; } }
+
 /* Glassmorphism card style */
 .glass-card {
   background: rgba(255, 255, 255, 0.85);
@@ -34,3 +111,50 @@ body {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #F9A8D4; border-radius: 3px; }
+
+/* Device Control: tighter spacing on short desktop viewports */
+@media (min-width: 1280px) and (max-height: 700px) { .dev-pad { padding: 0.5rem !important; } .dev-gap { gap: 0.375rem !important; } .dev-note { display: none; } }
+/* Indic scripts need taller lines; reclaim the difference on very short desktop screens */
+@media (min-width: 1280px) and (max-height: 700px) { html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .dev-pad { padding: 0.375rem 0.5rem !important; } html:is([lang='hi'], [lang='kn'], [lang='ta'], [lang='te']) .dev-gap { gap: 0.25rem !important; } }
+
+/* ---- Report Audit: report document (screen + print/PDF) ---- */
+.rpt { color: #1f2937; font-size: 0.875rem; line-height: 1.5; }
+.rpt-brand { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #be185d; }
+.rpt-title { font-family: inherit; font-size: 1.25rem; font-weight: 700; color: #111827; margin: 0.15rem 0 0.6rem; }
+.rpt-meta { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; margin: 0; }
+.rpt-meta dt { font-size: 0.7rem; color: #6b7280; }
+.rpt-meta dd { margin: 0; font-weight: 600; }
+.rpt-notice { margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 0.75rem; background: #fdf2f8; border: 1px solid #fbcfe8; }
+.rpt-notice-title { font-weight: 700; color: #9d174d; margin: 0 0 0.25rem; }
+.rpt-notice ul, .rpt-foot ul { margin: 0; padding-left: 1.1rem; list-style: disc; }
+.rpt-section { margin-top: 1.25rem; break-inside: avoid-page; }
+.rpt-section-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+.rpt-section-head h3 { font-size: 1rem; font-weight: 700; margin: 0; color: #111827; }
+.rpt-ai { font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.55rem; border-radius: 999px; background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+.rpt-count { font-size: 0.75rem; color: #6b7280; margin-left: auto; }
+.rpt-ai-note { font-size: 0.75rem; color: #5b21b6; margin: 0 0 0.4rem; }
+.rpt-empty { font-size: 0.8rem; color: #6b7280; margin: 0.25rem 0; }
+.rpt-table-wrap { overflow-x: auto; }
+.rpt table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.rpt th { text-align: left; font-weight: 600; color: #6b21a8; background: #faf5ff; padding: 0.4rem 0.6rem; border-bottom: 1px solid #e9d5ff; white-space: nowrap; }
+.rpt td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #f3e8ff; vertical-align: top; overflow-wrap: anywhere; }
+.rpt-foot { margin-top: 1.25rem; padding-top: 0.75rem; border-top: 1px solid #e5e7eb; font-size: 0.75rem; color: #4b5563; }
+.rpt-foot p { margin: 0.25rem 0; }
+.rpt-foot-title { font-weight: 700; }
+
+#print-root { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; }
+  #root { display: none !important; }
+  #print-root { display: block !important; }
+  #print-root .rpt { font-size: 10.5pt; color: #000; }
+  #print-root .rpt-brand, #print-root .rpt-notice-title, #print-root .rpt-ai, #print-root .rpt-ai-note, #print-root .rpt th { color: #000; }
+  #print-root .rpt-notice { background: #fff; border: 1px solid #000; }
+  #print-root .rpt-ai { background: #fff; border: 1px solid #000; }
+  #print-root .rpt th { background: #fff; border-bottom: 1.5px solid #000; }
+  #print-root .rpt td { border-bottom: 1px solid #bbb; }
+  #print-root .rpt tr { break-inside: avoid; }
+  #print-root .rpt thead { display: table-header-group; }
+  #print-root .rpt-table-wrap { overflow: visible; }
+}

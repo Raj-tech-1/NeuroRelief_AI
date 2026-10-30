@@ -1,8 +1,11 @@
-import Spinner from '../../components/Spinner'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useFormat } from '../../i18n/format'
+import EnglishOnly from '../../components/EnglishOnly'
 import { getCycleData, addCycle } from '../../services/api'
 import { downloadCSV } from '../../components/ExportCSV'
 import PainCalendar from '../../components/PainCalendar'
+import { Icon } from '../../components/icons'
 
 function getInsightsForPhase(phase) {
   const insights = {
@@ -15,7 +18,32 @@ function getInsightsForPhase(phase) {
   return insights[phase] || insights['Unknown']
 }
 
-export default function CycleTracking() {
+// General wellness tips (educational content, not personal data)
+const TIPS = [
+  { id: 'hydrate', icon: 'drop', tone: 'bg-blue-50 text-blue-500' },
+  { id: 'move', icon: 'heart', tone: 'bg-brand-50 text-brand-500' },
+  { id: 'sleep', icon: 'leaf', tone: 'bg-green-50 text-green-600' },
+]
+
+const card = 'bg-white/90 rounded-2xl border border-brand-100/70 shadow-sm shadow-brand-100/50'
+const field = 'w-full px-3 py-2.5 rounded-xl border border-brand-100 bg-white text-sm focus:outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-200/60'
+
+function StatCard({ icon, tone, label, value, link, onLink, compact }) {
+  return (
+    <div className={`${card} p-5 flex items-center gap-4`}>
+      <span className={`shrink-0 w-14 h-14 rounded-full flex items-center justify-center ${tone}`}><Icon name={icon} size={26} /></span>
+      <div className="min-w-0">
+        <p className="text-sm text-gray-500">{label}</p>
+        <p className={`font-display font-bold text-gray-900 leading-tight ${compact ? 'text-xl' : 'text-2xl'}`}>{value}</p>
+        <button onClick={onLink} className="text-xs font-medium text-brand-600 hover:text-brand-800 mt-1 text-left focus:outline-none focus-visible:underline">{link} →</button>
+      </div>
+    </div>
+  )
+}
+
+export default function CycleTracking({ onTabChange }) {
+  const { t } = useTranslation()
+  const fmt = useFormat()
   const [showAddCycle, setShowAddCycle] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -23,7 +51,12 @@ export default function CycleTracking() {
   const [mood, setMood] = useState('Normal')
   const [cycleLength, setCycleLength] = useState(28)
   const [saveMsg, setSaveMsg] = useState('')
+  const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [tipIndex, setTipIndex] = useState(0)
+  const trackerRef = useRef(null)
+  const recsRef = useRef(null)
 
   // Data from backend
   const [currentPhase, setCurrentPhase] = useState('Unknown')
@@ -39,13 +72,15 @@ export default function CycleTracking() {
       const data = await getCycleData('usr')
       setCurrentPhase(data.currentPhase || 'Unknown')
       setDayOfCycle(data.dayOfCycle || null)
-      setNextPeriod(data.nextPeriod || '-')
+      setNextPeriod(data.nextPeriod ?? '-')
       setFertileWindow(data.fertileWindow || { start: '-', end: '-' })
       setLastCycle(data.lastCycle || null)
       setCycles(data.cycles || [])
       setInsights(data.insights || getInsightsForPhase(data.currentPhase))
+      setLoadError('')
     } catch (err) {
       console.error('Failed to fetch cycle data:', err)
+      setLoadError('cycle.loadError')   // translation key, resolved at render so it follows the language
     } finally {
       setLoading(false)
     }
@@ -53,138 +88,243 @@ export default function CycleTracking() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function handleSaveCycle() {
-    if (!startDate) { setSaveMsg('Please select a start date'); return }
-    await addCycle('usr', { startDate, endDate, cycleLength, flow, mood })
-    setSaveMsg('Cycle saved!')
-    setStartDate('')
-    setEndDate('')
-    setFlow('Medium')
-    setMood('Normal')
-    setCycleLength(28)
-    // Refresh data from backend
-    await fetchData()
-    setTimeout(() => { setSaveMsg(''); setShowAddCycle(false) }, 1000)
+  function openForm() {
+    setShowAddCycle(true)
+    setSaveMsg('')
+    setTimeout(() => trackerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
 
-  if (loading) return <Spinner text="Loading cycle data..." />
+  async function handleSaveCycle() {
+    if (saving) return
+    if (!startDate) { setSaveMsg({ key: 'cycle.needStart' }); return }
+    if (endDate && endDate < startDate) { setSaveMsg({ key: 'cycle.endBeforeStart' }); return }
+    if (!(cycleLength >= 20 && cycleLength <= 40)) { setSaveMsg({ key: 'cycle.lengthRange' }); return }
+    setSaving(true)
+    try {
+      const res = await addCycle('usr', { startDate, endDate, cycleLength, flow, mood })
+      if (res?.error) { setSaveMsg({ text: res.error, server: true }); return }
+      setSaveMsg({ key: 'cycle.saved', ok: true })
+      setStartDate('')
+      setEndDate('')
+      setFlow('Medium')
+      setMood('Normal')
+      setCycleLength(28)
+      await fetchData()
+      setTimeout(() => { setSaveMsg(''); setShowAddCycle(false) }, 1000)
+    } catch {
+      setSaveMsg({ key: 'cycle.saveFailed' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-24 text-brand-700" role="status">
+        <span className="w-5 h-5 rounded-full border-2 border-brand-200 border-t-brand-600 animate-spin" aria-hidden="true" />
+        <span className="text-sm">{t('cycle.loading')}</span>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" className={`${card} p-8 text-center`}>
+        <p className="font-semibold text-gray-800">{t(loadError)}</p>
+        <button onClick={() => { setLoading(true); fetchData() }} className="mt-4 px-5 py-2 bg-brand-700 text-white rounded-lg text-sm font-medium hover:bg-brand-800">{t('common.tryAgain')}</button>
+      </div>
+    )
+  }
+
+  const hasCycle = currentPhase !== 'Unknown'
+  const hasFertile = hasCycle && fertileWindow?.start && fertileWindow.start !== '-'
+  const tPhase = ph => t(`phase.${ph}`, { defaultValue: ph })
+  const nextValue = !hasCycle || nextPeriod === '-' ? t('cycle.daysUnknown') : nextPeriod === 0 ? t('cycle.dueNow') : t('cycle.days', { count: nextPeriod })
+  // insights: shown in the selected language by phase; the API's English text is only a fallback for unknown phases
+  const insightText = t(`phaseDesc.${currentPhase}`, { defaultValue: insights.description })
+  const recsTr = t(`phaseRecs.${currentPhase}`, { returnObjects: true })
+  const recs = Array.isArray(recsTr) && recsTr.length === insights.recommendations.length ? recsTr : insights.recommendations
+  const tip = TIPS[tipIndex]
+  const tipTitle = t(`cycle.tip.${tip.id}.title`)
+  const tipText = t(`cycle.tip.${tip.id}.text`)
 
   return (
-    <>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* Left: Cycle Tracker */}
-      <div className="glass-card p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-gray-900">Cycle Tracker</h3>
-          <button
-            onClick={() => { setShowAddCycle(!showAddCycle); setSaveMsg('') }}
-            className="px-4 py-1.5 border border-brand-300 text-brand-600 text-sm rounded-lg hover:bg-brand-50 transition"
-          >
-            {showAddCycle ? 'Cancel' : 'Add Cycle'}
+    <div className="space-y-5">
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-brand-100/90 via-brand-50 to-brand-100/60 border border-brand-100/70 p-6 md:p-8 min-h-[190px] flex items-center">
+        <svg viewBox="0 0 520 220" className="hidden md:block absolute right-52 lg:right-56 top-0 h-full w-[420px] pointer-events-none" aria-hidden="true">
+          <circle cx="330" cy="120" r="110" fill="#FBCFE8" opacity=".45" />
+          <path d="M300 220c-8-60 6-120 52-170" stroke="#F9A8D4" strokeWidth="2" fill="none" strokeLinecap="round" />
+          <path d="M330 150c-50-8-76-34-80-74 50 4 76 30 80 74z" fill="#F9A8D4" opacity=".7" />
+          <path d="M352 100c42-12 64-40 64-80-42 8-64 36-64 80z" fill="#F687B3" opacity=".55" />
+          <path d="M318 196c-38 4-64-10-80-38 38-6 68 8 80 38z" fill="#FBCFE8" />
+          <path d="M400 190c-30-14-42-40-36-70 30 14 42 40 36 70z" fill="#FDDDE6" />
+        </svg>
+        <div className="relative max-w-xl min-w-0">
+          <h2 className="hero-title font-display text-3xl md:text-4xl font-bold text-brand-900 leading-tight break-words">{t('cycle.heroTitle')}</h2>
+          <p className="text-gray-600 mt-3 max-w-md">{t('cycle.heroText')}</p>
+          <button onClick={openForm}
+            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-brand-700 hover:bg-brand-800 text-white rounded-xl text-sm font-semibold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300">
+            <Icon name="plus" size={16} /> {t('cycle.logCycle')}
           </button>
         </div>
+        <p className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2 w-44 text-center font-display italic text-brand-800/80 text-lg leading-snug">
+          {t('cycle.heroQuote')}
+        </p>
+      </section>
 
-        {showAddCycle && (
-          <div className="mb-4 p-4 bg-brand-50 rounded-xl space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Period start date *</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Period end date (optional)</label>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cycle length (days)</label>
-              <input type="number" value={cycleLength} onChange={e => setCycleLength(Number(e.target.value))} min="20" max="40" className="w-full px-3 py-2 border rounded-lg text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Flow intensity</label>
-              <select value={flow} onChange={e => setFlow(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm">
-                <option>Light</option><option>Medium</option><option>Heavy</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Mood</label>
-              <select value={mood} onChange={e => setMood(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm">
-                <option>Happy</option><option>Normal</option><option>Tired</option><option>Irritable</option><option>Anxious</option><option>Sad</option>
-              </select>
-            </div>
-            {saveMsg && <p className={`text-sm font-medium ${saveMsg.includes('saved') ? 'text-green-600' : 'text-red-500'}`}>{saveMsg}</p>}
-            <button onClick={handleSaveCycle} className="w-full py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600">Save Cycle</button>
-          </div>
-        )}
+      {/* Phase / period / fertile window / insights */}
+      <section className="indic-2col grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" aria-label={t('cycle.summary')}>
+        <StatCard icon="drop" tone="bg-brand-50 text-brand-600" label={t('cycle.currentPhase')}
+          value={<>{tPhase(currentPhase)}{dayOfCycle && <span className="block font-sans text-xs font-normal text-gray-500">{t('cycle.dayOfCycle', { day: fmt.number(dayOfCycle) })}</span>}</>}
+          link={t('cycle.learnPhases')} onLink={() => onTabChange && onTabChange('learn')} />
+        <StatCard icon="calendar" tone="bg-blue-50 text-blue-500" label={t('cycle.nextPeriod')} value={nextValue}
+          link={hasCycle ? t('cycle.logNew') : t('cycle.logToPredict')} onLink={openForm} />
+        <StatCard compact icon="leaf" tone="bg-pink-50 text-brand-500" label={t('cycle.fertileWindow')} value={hasFertile ? `${fmt.isoDate(fertileWindow.start)} – ${fmt.isoDate(fertileWindow.end)}` : '- - -'}
+          link={t('cycle.understandFertile')} onLink={() => onTabChange && onTabChange('learn')} />
+        <button onClick={() => recsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+          className="rounded-2xl bg-gradient-to-br from-brand-100/80 to-brand-50 border border-brand-100/70 p-5 flex items-center gap-4 text-left hover:shadow-md transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">
+          <span className="shrink-0 w-14 h-14 rounded-full bg-white/70 text-brand-700 flex items-center justify-center"><Icon name="chart" size={26} /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-lg font-bold text-gray-900">{t('cycle.insights')}</span>
+            <span className="block text-xs text-gray-600 mt-1 line-clamp-3 cycle-insight-text break-words">{insightText}</span>
+          </span>
+          <Icon name="chevron" size={18} className="text-gray-400 shrink-0" />
+        </button>
+      </section>
 
-        {/* Phase cards */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-pink-50 p-3 rounded-xl">
-            <p className="text-xs font-semibold text-brand-600">Current Phase</p>
-            <p className="text-lg font-bold text-gray-900">{currentPhase}</p>
-            {dayOfCycle && <p className="text-xs text-gray-500">Day {dayOfCycle} of cycle</p>}
-          </div>
-          <div className="bg-purple-50 p-3 rounded-xl">
-            <p className="text-xs font-semibold text-purple-600">Next Period</p>
-            <p className="text-lg font-bold text-gray-900">{nextPeriod} days</p>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-5">
+        <div className="space-y-5 min-w-0">
+          <PainCalendar dayOfCycle={dayOfCycle} />
 
-        <div className="bg-pink-50 p-3 rounded-xl mb-4">
-          <p className="text-xs font-semibold text-brand-600">Fertile Window</p>
-          <p className="text-sm font-bold text-gray-900">{fertileWindow.start} - {fertileWindow.end}</p>
-        </div>
-
-        {lastCycle && (
-          <div>
-            <p className="text-xs font-semibold text-brand-600 mb-2">Last Cycle Details</p>
-            <div className="grid grid-cols-2 gap-y-2 text-sm">
-              <p className="text-gray-500">Period started:</p>
-              <p className="font-medium">{lastCycle.startDate}</p>
-              <p className="text-gray-500">Cycle length:</p>
-              <p className="font-medium">{lastCycle.cycleLength} days</p>
-              <p className="text-gray-500">Flow:</p>
-              <p className="font-medium">{lastCycle.flow}</p>
-              <p className="text-gray-500">Mood:</p>
-              <p className="font-medium">{lastCycle.mood}</p>
+          {/* Cycle tracker: log a cycle, last cycle, history */}
+          <section ref={trackerRef} className={`${card} p-5 md:p-6 scroll-mt-24`}>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h3 className="font-display text-xl font-bold text-gray-900">{t('cycle.tracker')}</h3>
+              <button onClick={() => { showAddCycle ? setShowAddCycle(false) : openForm(); setSaveMsg('') }} aria-expanded={showAddCycle}
+                className="px-4 py-1.5 border border-brand-200 text-brand-700 text-sm rounded-lg hover:bg-brand-50 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+                {showAddCycle ? t('common.cancel') : t('cycle.addCycle')}
+              </button>
             </div>
-          </div>
-        )}
 
-        {/* Cycle history */}
-        {cycles.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-brand-600">Cycle History</p>
-              <button onClick={() => downloadCSV(cycles, 'cycle_history.csv')}
-                className="text-xs text-brand-600 hover:text-brand-800 underline">Export CSV</button>
-            </div>
-            {cycles.map((c, i) => (
-              <div key={i} className="bg-green-50 p-3 rounded-xl mb-2 text-sm flex justify-between items-center">
-                <span>{c.start_date}</span>
-                <span className="text-gray-500">{c.flow} flow • {c.mood || '-'}</span>
+            {showAddCycle && (
+              <div className="mb-5 p-4 bg-brand-50/70 border border-brand-100 rounded-2xl grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="cy-start" className="block text-sm font-medium text-gray-700 mb-1">{t('cycle.startDate')}</label>
+                  <input id="cy-start" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={field} />
+                </div>
+                <div>
+                  <label htmlFor="cy-end" className="block text-sm font-medium text-gray-700 mb-1">{t('cycle.endDate')}</label>
+                  <input id="cy-end" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={field} />
+                </div>
+                <div>
+                  <label htmlFor="cy-len" className="block text-sm font-medium text-gray-700 mb-1">{t('cycle.cycleLength')}</label>
+                  <input id="cy-len" type="number" value={cycleLength} onChange={e => setCycleLength(Number(e.target.value))} min="20" max="40" className={field} />
+                </div>
+                <div>
+                  <label htmlFor="cy-flow" className="block text-sm font-medium text-gray-700 mb-1">{t('cycle.flowIntensity')}</label>
+                  <select id="cy-flow" value={flow} onChange={e => setFlow(e.target.value)} className={field}>
+                    {['Light', 'Medium', 'Heavy'].map(v => <option key={v} value={v}>{t(`flowValue.${v}`)}</option>)}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="cy-mood" className="block text-sm font-medium text-gray-700 mb-1">{t('cycle.mood')}</label>
+                  <select id="cy-mood" value={mood} onChange={e => setMood(e.target.value)} className={field}>
+                    {['Happy', 'Normal', 'Tired', 'Irritable', 'Anxious', 'Sad'].map(v => <option key={v} value={v}>{t(`moodValue.${v}`)}</option>)}
+                  </select>
+                </div>
+                {saveMsg && (
+                  <p role="status" className={`sm:col-span-2 text-sm font-medium ${saveMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{saveMsg.key ? t(saveMsg.key) : saveMsg.text}{saveMsg.server && <EnglishOnly />}</p>
+                )}
+                <button onClick={handleSaveCycle} disabled={saving}
+                  className="sm:col-span-2 py-2.5 bg-brand-700 text-white rounded-xl text-sm font-semibold hover:bg-brand-800 disabled:opacity-60 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300">
+                  {saving ? t('common.saving') : t('cycle.saveCycle')}
+                </button>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            )}
 
-      {/* Right: Insights */}
-      <div className="glass-card p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Cycle Insights</h3>
-        <div className="bg-purple-50 p-4 rounded-xl mb-4">
-          <p className="font-semibold text-gray-900 mb-1">Current Phase</p>
-          <p className="text-sm text-gray-600">{insights.description}</p>
+            {lastCycle ? (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 mb-2">{t('cycle.lastCycle')}</p>
+                <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  {[[t('cycle.periodStarted'), fmt.isoDate(lastCycle.startDate)], [t('cycle.lengthLabel'), t('cycle.lengthDays', { n: fmt.number(lastCycle.cycleLength) })], [t('cycle.flow'), t(`flowValue.${lastCycle.flow}`, { defaultValue: lastCycle.flow })], [t('cycle.mood'), t(`moodValue.${lastCycle.mood}`, { defaultValue: lastCycle.mood })]].map(([k, v], i) => (
+                    <div key={i} className="bg-brand-50/60 rounded-xl px-3 py-2.5"><dt className="text-xs text-gray-500">{k}</dt><dd className="font-semibold text-gray-900">{v}</dd></div>
+                  ))}
+                </dl>
+              </div>
+            ) : !showAddCycle && (
+              <p className="text-sm text-gray-500">{t('cycle.noCycles')}</p>
+            )}
+
+            {cycles.length > 0 && (
+              <div className="mt-5 pt-4 border-t border-brand-100">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-brand-600">{t('cycle.history')}</p>
+                  <button onClick={() => downloadCSV(cycles, 'cycle_history.csv')}
+                    className="flex items-center gap-1 text-xs text-brand-700 hover:text-brand-900 focus:outline-none focus-visible:underline"><Icon name="download" size={14} /> {t('common.exportCsv')}</button>
+                </div>
+                <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {cycles.map(c => (
+                    <li key={c.cycle_id ?? c.start_date} className="bg-green-50/70 px-3 py-2.5 rounded-xl text-sm flex flex-wrap justify-between gap-1">
+                      <span className="font-medium text-gray-800">{fmt.isoDate(c.start_date)}</span>
+                      <span className="text-gray-500">{t('cycle.flowMood', { flow: t(`flowValue.${c.flow}`, { defaultValue: c.flow }), mood: c.mood ? t(`moodValue.${c.mood}`, { defaultValue: c.mood }) : '-' })}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
         </div>
-        <div className="bg-purple-50 p-4 rounded-xl">
-          <p className="font-semibold text-gray-900 mb-2">Recommendations</p>
-          {insights.recommendations.map((rec, i) => (
-            <p key={i} className="text-sm text-gray-600 mb-1">• {rec}</p>
-          ))}
+
+        <div className="space-y-5">
+          {/* Recommendations */}
+          <section ref={recsRef} className={`${card} p-5`}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-10 h-10 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center"><Icon name="bulb" size={20} /></span>
+              <h3 className="font-display text-xl font-bold text-gray-900">{t('cycle.recommendations')}</h3>
+            </div>
+            <ul className="space-y-3">
+              {recs.map((rec, i) => {
+                const icons = [['calendar', 'bg-brand-50 text-brand-500'], ['doc', 'bg-indigo-50 text-indigo-500'], ['heart', 'bg-orange-50 text-orange-500']]
+                const [ic, tone] = icons[i % icons.length]
+                return (
+                  <li key={rec} className="flex items-center gap-3 p-3 rounded-xl border border-brand-100/70 bg-white">
+                    <span className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${tone}`}><Icon name={ic} size={18} /></span>
+                    <span className="text-sm font-medium text-gray-900">{rec}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+
+          {/* Tips carousel */}
+          <section className={`${card} p-5`} aria-roledescription="carousel" aria-label={t('cycle.tipsLabel')}>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-10 h-10 rounded-full bg-brand-50 text-brand-500 flex items-center justify-center"><Icon name="leaf" size={20} /></span>
+              <h3 className="font-display text-xl font-bold text-gray-900">{t('cycle.tips')}</h3>
+            </div>
+            <div className="flex items-center gap-4 bg-blue-50/70 rounded-2xl p-4 min-h-[96px]" aria-live="polite">
+              <span className={`shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center ${tip.tone}`}><Icon name={tip.icon} size={26} /></span>
+              <div>
+                <p className="font-semibold text-gray-900">{tipTitle}</p>
+                <p className="text-xs text-gray-600 mt-0.5">{tipText}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-4">
+              <button onClick={() => setTipIndex(i => (i + TIPS.length - 1) % TIPS.length)} aria-label={t('cycle.prevTip')}
+                className="w-10 h-10 rounded-full bg-gray-100 text-gray-600 hover:bg-brand-50 flex items-center justify-center"><Icon name="chevronLeft" size={18} /></button>
+              <div className="flex gap-1.5">
+                {TIPS.map((tp, i) => (
+                  <button key={tp.id} onClick={() => setTipIndex(i)} aria-label={t('cycle.showTip', { n: i + 1 })} aria-current={i === tipIndex}
+                    className={`w-2 h-2 rounded-full ${i === tipIndex ? 'bg-brand-600' : 'bg-gray-300'}`} />
+                ))}
+              </div>
+              <button onClick={() => setTipIndex(i => (i + 1) % TIPS.length)} aria-label={t('cycle.nextTip')}
+                className="w-10 h-10 rounded-full bg-gray-100 text-gray-600 hover:bg-brand-50 flex items-center justify-center"><Icon name="chevron" size={18} /></button>
+            </div>
+          </section>
         </div>
       </div>
     </div>
-
-    {/* Pain Prediction Calendar */}
-    <PainCalendar currentPhase={currentPhase} dayOfCycle={dayOfCycle} />
-    </>
   )
 }

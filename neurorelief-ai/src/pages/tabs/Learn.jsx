@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useFormat } from '../../i18n/format'
+import EnglishOnly from '../../components/EnglishOnly'
 import { getArticles } from '../../services/api'
 
 const categories = [
-  { id: 'all', label: 'All Topics', emoji: '📚' },
-  { id: 'menstrual health', label: 'Menstrual Health', emoji: '⚙️' },
-  { id: 'nutrition', label: 'Nutrition', emoji: '🥗' },
-  { id: 'mental health', label: 'Mental Health', emoji: '🧠' },
-  { id: 'fitness', label: 'Fitness', emoji: '💪' },
-  { id: 'sexual health', label: 'Sexual Health', emoji: '💕' },
+  { id: 'all', emoji: '📚' },
+  { id: 'menstrual health', emoji: '⚙️' },
+  { id: 'nutrition', emoji: '🥗' },
+  { id: 'mental health', emoji: '🧠' },
+  { id: 'fitness', emoji: '💪' },
+  { id: 'sexual health', emoji: '💕' },
 ]
 
 const levelColors = {
@@ -191,6 +194,8 @@ const articleContent = {
 }
 
 export default function Learn() {
+  const { t } = useTranslation()
+  const fmt = useFormat()
   const [articles, setArticles] = useState([])
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
@@ -198,9 +203,17 @@ export default function Learn() {
 
   useEffect(() => { getArticles().then(setArticles) }, [])
 
+  // titles/descriptions are shown in the selected language (articles.<id>.*); the English text stays as the fallback
+  const tTitle = a => t(`articles.${a.id}.title`, { defaultValue: a.title })
+  const tDesc = a => t(`articles.${a.id}.description`, { defaultValue: a.description })
+  const tCat = c => t(`category.${c}`, { defaultValue: c })
+  const tLevel = l => t(`level.${l}`, { defaultValue: l })
+
   const filtered = articles.filter(a => {
     const matchCat = activeCategory === 'all' || a.category === activeCategory
-    const matchSearch = !search || a.title.toLowerCase().includes(search.toLowerCase()) || a.description.toLowerCase().includes(search.toLowerCase())
+    const q = search.toLowerCase()
+    // search matches both the displayed (translated) text and the original English text
+    const matchSearch = !search || [a.title, a.description, tTitle(a), tDesc(a)].some(x => x.toLowerCase().includes(q))
     return matchCat && matchSearch
   })
 
@@ -210,26 +223,31 @@ export default function Learn() {
     const content = articleContent[openArticle]
     return (
       <div className="glass-card p-6">
-        <button onClick={() => setOpenArticle(null)} className="text-brand-600 text-sm font-medium mb-4 hover:text-brand-800">← Back to articles</button>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-brand-800">{article?.title}</h3>
-          <span className={`text-xs px-3 py-1 rounded-full font-medium ${catBadgeColors[article?.category] || 'bg-gray-100 text-gray-600'}`}>
-            {article?.category}
+        <button onClick={() => setOpenArticle(null)} className="text-brand-600 text-sm font-medium mb-4 hover:text-brand-800">{t('learn.back')}</button>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 className="text-xl font-bold text-brand-800">{article && tTitle(article)}</h3>
+          <span className={`shrink-0 text-xs px-3 py-1 rounded-full font-medium ${catBadgeColors[article?.category] || 'bg-gray-100 text-gray-600'}`}>
+            {article && tCat(article.category)}
           </span>
         </div>
         <div className="flex items-center gap-3 mb-6">
-          <span className="text-xs text-gray-400">⏱ {article?.readTime} min read</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${levelColors[article?.level]}`}>{article?.level}</span>
+          <span className="text-xs text-gray-400">{t('learn.readMinLong', { n: fmt.number(article?.readTime) })}</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${levelColors[article?.level]}`}>{article && tLevel(article.level)}</span>
         </div>
-        <p className="text-gray-600 mb-6">{article?.description}</p>
+        <p className="text-gray-600 mb-6">{article && tDesc(article)}</p>
+        {content && (
+          <p className="mb-5 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+            {t('learn.bodyNote')}<EnglishOnly />
+          </p>
+        )}
         {content?.sections.map((section, i) => (
-          <div key={i} className="mb-5">
+          <div key={i} className="mb-5" lang="en">
             <h4 className="font-semibold text-gray-900 mb-2">{section.heading}</h4>
             <p className="text-sm text-gray-600 leading-relaxed">{section.body}</p>
           </div>
         ))}
         <div className="mt-6 pt-4 border-t border-gray-100">
-          <button onClick={() => setOpenArticle(null)} className="px-6 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600">Back to Articles</button>
+          <button onClick={() => setOpenArticle(null)} className="px-6 py-2 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600">{t('learn.backBtn')}</button>
         </div>
       </div>
     )
@@ -237,12 +255,13 @@ export default function Learn() {
 
   return (
     <div className="glass-card p-6">
-      <h3 className="text-lg font-bold text-brand-800 mb-1">Educational Content</h3>
-      <p className="text-sm text-gray-500 mb-4">Evidence-based articles to help you understand your body better</p>
+      <h3 className="text-lg font-bold text-brand-800 mb-1">{t('learn.title')}</h3>
+      <p className="text-sm text-gray-500 mb-4">{t('learn.subtitle')}</p>
 
       <input
         type="text"
-        placeholder="Search articles..."
+        placeholder={t('learn.searchPh')}
+        aria-label={t('learn.searchPh')}
         value={search}
         onChange={e => setSearch(e.target.value)}
         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl mb-4 text-sm focus:outline-none focus:border-brand-400"
@@ -253,11 +272,12 @@ export default function Learn() {
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
+            aria-pressed={activeCategory === cat.id}
             className={`flex items-center gap-1 px-4 py-2 rounded-full text-sm font-medium transition ${
               activeCategory === cat.id ? 'bg-brand-500 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
             }`}
           >
-            <span>{cat.emoji}</span> {cat.label}
+            <span>{cat.emoji}</span> {tCat(cat.id)}
           </button>
         ))}
       </div>
@@ -265,25 +285,25 @@ export default function Learn() {
       <div className="space-y-3">
         {filtered.map(article => (
           <div key={article.id} className="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <h4 className="font-bold text-brand-800">{article.title}</h4>
-                <p className="text-sm text-gray-500 mt-1">{article.description}</p>
+            <div className="flex flex-wrap justify-between items-start gap-3">
+              <div className="flex-1 basis-48 min-w-0">
+                <h4 className="font-bold text-brand-800">{tTitle(article)}</h4>
+                <p className="text-sm text-gray-500 mt-1">{tDesc(article)}</p>
                 <div className="flex items-center gap-3 mt-2">
-                  <span className="text-xs text-gray-400">⏱ {article.readTime} min</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${levelColors[article.level]}`}>{article.level}</span>
+                  <span className="text-xs text-gray-400">{t('learn.readMin', { n: fmt.number(article.readTime) })}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${levelColors[article.level]}`}>{tLevel(article.level)}</span>
                 </div>
               </div>
-              <span className={`text-xs px-3 py-1 rounded-full font-medium ${catBadgeColors[article.category] || 'bg-gray-100 text-gray-600'}`}>
-                {article.category}
+              <span className={`shrink-0 text-xs px-3 py-1 rounded-full font-medium ${catBadgeColors[article.category] || 'bg-gray-100 text-gray-600'}`}>
+                {tCat(article.category)}
               </span>
             </div>
             <div className="text-right mt-2">
-              <button onClick={() => setOpenArticle(article.id)} className="text-sm text-brand-600 font-medium hover:text-brand-800">Read More →</button>
+              <button onClick={() => setOpenArticle(article.id)} className="text-sm text-brand-600 font-medium hover:text-brand-800">{t('learn.readMore')}</button>
             </div>
           </div>
         ))}
-        {filtered.length === 0 && <p className="text-center text-gray-400 py-8">No articles found</p>}
+        {filtered.length === 0 && <p className="text-center text-gray-400 py-8">{t('learn.none')}</p>}
       </div>
     </div>
   )

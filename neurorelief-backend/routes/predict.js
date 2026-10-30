@@ -88,14 +88,17 @@ router.post('/', (req, res) => {
     fs.writeFileSync(tempFile, JSON.stringify(inputData))
 
     // Call Python with file path as argument — no quotes or stdin issues
-    const cmd = `py -3.14 "${scriptPath}" "${tempFile}"`
+    // Python launcher is configurable (PYTHON_CMD); default is the 3.13 install that has the model's deps
+    const cmd = `${process.env.PYTHON_CMD || 'py -3.13'} "${scriptPath}" "${tempFile}"`
     console.log('Running:', cmd)
-    
-    const result = execSync(cmd, { encoding: 'utf-8', timeout: 30000 })
-    console.log('Python output:', result.trim())
 
-    // Cleanup
-    try { fs.unlinkSync(tempFile) } catch {}
+    let result
+    try {
+      result = execSync(cmd, { encoding: 'utf-8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] })
+    } finally {
+      try { fs.unlinkSync(tempFile) } catch {}
+    }
+    console.log('Python output:', result.trim())
 
     const prediction = JSON.parse(result.trim())
 

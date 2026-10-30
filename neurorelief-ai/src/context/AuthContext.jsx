@@ -16,8 +16,13 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }, [])
 
-  async function login(email, password) {
+  // expectedRole (optional): used by the Doctor Portal. A valid account with a different role is
+  // refused BEFORE any session is stored. This is a UX check only; the backend enforces roles.
+  async function login(email, password, expectedRole) {
     const userData = await loginUser(email, password)
+    if (expectedRole && userData.role !== expectedRole) {
+      throw new Error('This account is not a doctor account. Please use the patient sign in.')
+    }
     setUser(userData)
     localStorage.setItem('neurorelief_user', JSON.stringify(userData))
     return userData
