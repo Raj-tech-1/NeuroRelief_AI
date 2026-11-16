@@ -158,7 +158,11 @@
     "daysLate_other": "days late",
     "lateStatus_one": "Period late by {{count}} day. Log it when it starts.",
     "lateStatus_other": "Period late by {{count}} days. Log it when it starts.",
-    "predAgeUpdate": "{{age}} — update"
+    "predAgeUpdate": "{{age}} — update",
+    "profileTitle": "Complete your profile",
+    "profileCount": "({{done}}/{{total}})",
+    "profileText": "Missing: {{missing}}. Age and BMI make predictions more personal.",
+    "profileCta": "Update profile"
   },
   "common": {
     "englishOnly": "English only",
@@ -605,7 +609,9 @@
         "title": "Better Sleep",
         "text": "Aim for 7–9 hours of quality sleep for hormonal balance."
       }
-    }
+    },
+    "profileDefaults": "This prediction used a default age and BMI.",
+    "completeProfile": "Complete your profile"
   },
   "apptStatus": {
     "pending": "Pending",
@@ -848,7 +854,11 @@
     "saved": "Profile saved!",
     "save": "Save Profile",
     "nameInvalid": "Please enter your name (up to 60 characters).",
-    "saveFailed": "Could not save your profile. Please try again."
+    "saveFailed": "Could not save your profile. Please try again.",
+    "loadFailed": "Could not load your profile. Please try again.",
+    "rangeInvalid": "Please check the values: age 10-80, height 100-220 cm, weight 30-200 kg.",
+    "fromBrowser": "We found details saved earlier in this browser only. Save to keep them on your account.",
+    "privacy": "Age and BMI make your pain predictions more personal. Doctors only see them if you share the \"Profile\" category with them."
   },
   "auth": {
     "tagline": "Menstrual Wellness, Personalized by AI",

@@ -57,11 +57,16 @@ export async function registerUser(email, password) {
   return data
 }
 
-// Saves the display name on the account (shown to doctors and across the app). Throws with the server's message.
-export async function updateMyName(name) {
-  const res = await fetch(`${BASE_URL}/auth/me`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ name }) })
+// The signed-in account with its profile: { name, email, role, profile: { age, height, weight, bmi }, completion }
+export async function getMe() {
+  return okJson(await fetch(`${BASE_URL}/auth/me`, { headers: headers() }))
+}
+// Saves any of { name, age, height, weight } on the account (BMI is computed by the server). Throws with .status.
+export async function updateMyProfile(fields) {
+  const res = await fetch(`${BASE_URL}/auth/me`, { method: 'PATCH', headers: headers(), body: JSON.stringify(fields) })
   return okJson(res)
 }
+export const updateMyName = name => updateMyProfile({ name })
 
 // ─── Doctor application (public) and admin review ────
 // Errors carry .status, plus .field / .code from the server so the form can point at the right input.

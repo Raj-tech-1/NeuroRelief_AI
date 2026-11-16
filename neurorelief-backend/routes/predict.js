@@ -73,8 +73,12 @@ router.post('/', async (req, res) => {
     phase = 'Follicular', day_from_last_menses = 14, sleep_hours = 7,
     stress = 3, fatigue = 2, cramps = 2, headaches = 1, bloating = 1,
     moodswing = 1, sleepissue = 1, activity_level = 'Moderate',
-    mood = 'Calm', bmi = 22, age = 25
+    mood = 'Calm'
   } = req.body
+  // Age and BMI come from the patient's saved profile, never from the request; the model's defaults when missing
+  const me = get('SELECT age, bmi FROM users WHERE user_id = ?', [req.userId]) || {}
+  const age = me.age ?? 25, bmi = me.bmi ?? 22
+  const inputsUsed = { age, bmi, ageSource: me.age != null ? 'profile' : 'default', bmiSource: me.bmi != null ? 'profile' : 'default' }
 
   const scriptPath = path.join(__dirname, '..', 'predict.py')
   const modelPath = path.resolve(__dirname, '..', '..', 'neurorelief-ml', 'neurorelief_model.pkl')
@@ -129,6 +133,8 @@ router.post('/', async (req, res) => {
         High:     'High pain predicted. Prepare TENS and heat therapy.'
       }[adjLabel]
     }
+
+    prediction.inputs_used = inputsUsed
 
     prediction.calibration = {
       applied:  cal.active,

@@ -59,6 +59,7 @@ function readSeen() {
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview')
   const [showProfile, setShowProfile] = useState(false)
+  const [profileVersion, setProfileVersion] = useState(0)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -280,11 +281,12 @@ export default function Dashboard() {
         <main className={fitScreen ? 'px-4 md:px-6 py-4 xl:py-3 xl:h-[calc(100dvh-76px)]' : 'px-4 md:px-8 py-6 max-w-[1300px]'}>
           {showProfile && (
             <div className="mb-6">
-              <ProfilePage onClose={() => setShowProfile(false)} />
+              <ProfilePage onClose={() => setShowProfile(false)} onSaved={() => setProfileVersion(v => v + 1)} />
             </div>
           )}
           <Suspense fallback={<p className="py-10 text-center text-brand-700">{t('common.loading')}</p>}>
-            <ActiveComponent onTabChange={goTab} />
+            {/* profileVersion lets tabs (e.g. the Overview profile card) refresh after the profile is saved */}
+            <ActiveComponent onTabChange={goTab} onOpenProfile={openProfile} profileVersion={profileVersion} />
           </Suspense>
         </main>
       </div>

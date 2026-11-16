@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import Spinner from '../components/Spinner'
-import { updateMyName } from '../services/api'
+import { getMe, updateMyProfile } from '../services/api'
 
-export default function ProfilePage({ onClose }) {
+const LEGACY_KEY = 'neurorelief_profile'   // older versions kept age/height/weight only in this browser
+
+export default function ProfilePage({ onClose, onSaved }) {
   const { user, updateUser } = useAuth()
   const [saveError, setSaveError] = useState('')   // translation key
   const { t } = useTranslation()
@@ -13,31 +15,37 @@ export default function ProfilePage({ onClose }) {
   const [height, setHeight] = useState('')
   const [weight, setWeight] = useState('')
   const [bmi, setBmi] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [fromBrowser, setFromBrowser] = useState(false)   // values pre-filled from the old browser-only profile
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState(false)   // true while the 'saved' confirmation is showing (text is translated at render)
 
   useEffect(() => {
-    // Load saved profile from localStorage
-    const saved = localStorage.getItem('neurorelief_profile')
-    let p = null
-    try { p = saved ? JSON.parse(saved) : null } catch { /* corrupt entry: ignore */ }
-    // Skip a profile saved by a different account on this browser (older entries have no owner_id)
-    if (p && (p.owner_id == null || p.owner_id === user?.user_id)) {
-      setAge(p.age || '')
-      setHeight(p.height || '')
-      setWeight(p.weight || '')
-      setBmi(p.bmi || null)
-    }
-  }, [])
+    let alive = true
+    // The profile lives on the account (server). If it is still empty, offer the old browser-only values once.
+    getMe().then(me => {
+      if (!alive) return
+      const p = me.profile || {}
+      setName(me.name || '')
+      setAge(p.age ?? ''); setHeight(p.height ?? ''); setWeight(p.weight ?? ''); setBmi(p.bmi ?? null)
+      if (p.age == null && p.height == null && p.weight == null) {
+        let old = null
+        try { old = JSON.parse(localStorage.getItem(LEGACY_KEY) || 'null') } catch { /* corrupt: ignore */ }
+        if (old && old.owner_id === user?.user_id && (old.age || old.height || old.weight)) {
+          setAge(old.age || ''); setHeight(old.height || ''); setWeight(old.weight || '')
+          setFromBrowser(true)
+        }
+      }
+    }).catch(() => { if (alive) setSaveError('profile.loadFailed') })
+      .finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [user?.user_id])
 
   useEffect(() => {
-    if (height && weight) {
-      const h = parseFloat(height) / 100 // cm to m
-      const w = parseFloat(weight)
-      if (h > 0 && w > 0) {
-        setBmi(Math.round((w / (h * h)) * 10) / 10)
-      }
-    }
+    // Live preview only; the saved BMI is computed by the server
+    const h = parseFloat(height) / 100 // cm to m
+    const w = parseFloat(weight)
+    setBmi(h > 0 && w > 0 ? Math.round((w / (h * h)) * 10) / 10 : null)
   }, [height, weight])
 
   async function handleSave() {
@@ -45,19 +53,21 @@ export default function ProfilePage({ onClose }) {
     setSaving(true)
     setSaveError('')
     try {
-      // The display name is saved on the account, so doctors and every screen show it (not the email username)
-      const saved = await updateMyName(name)
+      // Everything is saved on the account: the name is shown to doctors; age and BMI feed the pain model.
+      // An empty measurement field clears it (null).
+      const blank = v => (v === '' || v == null ? null : Number(v))
+      const saved = await updateMyProfile({ name, age: blank(age), height: blank(height), weight: blank(weight) })
       updateUser({ name: saved.name })
       setName(saved.name)
-
-      // owner_id: the AI advisor only uses age/BMI from a profile saved by the same account
-      const profile = { name: saved.name, age, height, weight, bmi, owner_id: user?.user_id }
-      try { localStorage.setItem('neurorelief_profile', JSON.stringify(profile)) } catch { /* storage unavailable */ }
+      setBmi(saved.profile?.bmi ?? null)
+      setFromBrowser(false)
+      try { localStorage.removeItem(LEGACY_KEY) } catch { /* storage unavailable */ }
 
       setSaveMsg(true)
       setTimeout(() => setSaveMsg(false), 2000)
+      onSaved?.(saved)
     } catch (err) {
-      setSaveError(err.status === 400 ? 'profile.nameInvalid' : 'profile.saveFailed')
+      setSaveError(err.status === 400 ? (err.message?.startsWith('Name') || err.message?.startsWith('Please enter') ? 'profile.nameInvalid' : 'profile.rangeInvalid') : 'profile.saveFailed')
     } finally {
       setSaving(false)
     }
@@ -83,6 +93,9 @@ export default function ProfilePage({ onClose }) {
       </div>
 
       <div className="space-y-4">
+        {loading && <p role="status" className="text-sm text-brand-700">{t('common.loading')}</p>}
+        {fromBrowser && <p role="status" className="text-xs text-brand-800 bg-brand-50 border border-brand-100 rounded-lg px-3 py-2">{t('profile.fromBrowser')}</p>}
+        <p className="text-xs text-gray-500">{t('profile.privacy')}</p>
         <div>
           <label htmlFor="pf-name" className="block text-sm font-medium text-gray-700 mb-1">{t('profile.name')}</label>
           <input id="pf-name" value={name} onChange={e => setName(e.target.value)} maxLength={60} autoComplete="name"
@@ -122,7 +135,7 @@ export default function ProfilePage({ onClose }) {
         {saveMsg && <p role="status" className="text-sm text-green-600 font-medium text-center">{t('profile.saved')}</p>}
         {saveError && <p role="alert" className="text-sm text-red-600 font-medium text-center">{t(saveError)}</p>}
 
-        <button onClick={handleSave} disabled={saving}
+        <button onClick={handleSave} disabled={saving || loading}
           className="w-full py-2.5 bg-brand-500 text-white rounded-lg font-medium hover:bg-brand-600 disabled:opacity-60">
           {saving ? t('common.saving') : t('profile.save')}
         </button>

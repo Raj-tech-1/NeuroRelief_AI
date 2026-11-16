@@ -557,6 +557,11 @@ function readCategory(ctx, patientId, category, from, to) {
         `SELECT started_at, duration_seconds, source, ${category === 'heat_sessions' ? 'heat_temp_c' : 'tens_intensity, tens_frequency'}, pain_before, pain_after
          FROM therapy_sessions WHERE user_id = ? AND kind = ? AND ${inRange('substr(started_at, 1, 10)')} ORDER BY started_at DESC`,
         [patientId, category === 'heat_sessions' ? 'heat' : 'tens', from, to])
+    case 'profile': {
+      // Current measurements (not dated records), so the grant's date range does not apply
+      const u = ctx.db.get('SELECT age, height, weight, bmi FROM users WHERE user_id = ?', [patientId])
+      return u && (u.age != null || u.height != null || u.weight != null) ? [{ age: u.age, height_cm: u.height, weight_kg: u.weight, bmi: u.bmi }] : []
+    }
     default:
       throw E(400, 'INVALID_INPUT', 'Invalid record category.')
   }
@@ -581,7 +586,7 @@ export function doctorPatientRecords(ctx, doctorId, patientId, category) {
   const from = usable.map(g => g.range_from).sort()[0]
   const to = usable.map(g => g.range_to).sort().pop()
   const rows = readCategory(ctx, patientId, category, from, to)
-    .filter(r => usable.some(g => { const d = String(r.date || r.start_date || r.started_at || '').slice(0, 10); return d >= g.range_from && d <= g.range_to }))
+    .filter(r => category === 'profile' || usable.some(g => { const d = String(r.date || r.start_date || r.started_at || '').slice(0, 10); return d >= g.range_from && d <= g.range_to }))
   auditOrFail(ctx, { type: 'record_viewed', actor, patientId, grantId: usable[0].grant_id, appointmentId: usable[0].appointment_id, detail: category })
   return { category, rangeFrom: from, rangeTo: to, rows, grantIds: usable.map(g => g.grant_id) }
 }

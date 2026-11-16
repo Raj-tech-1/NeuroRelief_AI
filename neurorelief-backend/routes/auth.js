@@ -125,19 +125,54 @@ router.post('/login', loginLimit, (req, res) => {
   res.json({ ...publicUser(user), token })
 })
 
-// GET /api/auth/me — the signed-in account (name as stored on the server)
+// ---- Profile: display name + measurements (age, height, weight). BMI is always computed here, never sent.
+// Age and BMI feed the pain model (routes/predict.js). Doctors see them only through the 'profile' consent category.
+const PROFILE_LIMITS = { age: [10, 80], height: [100, 220], weight: [30, 200] }   // years, cm, kg
+const computeBmi = (h, w) => (h && w ? Math.round((w / ((h / 100) ** 2)) * 10) / 10 : null)
+
+function profileView(u) {
+  const filled = ['name', 'age', 'height', 'weight'].filter(k => k === 'name' ? !!u.name && u.name !== u.email.split('@')[0] : u[k] != null)
+  return {
+    ...publicUser(u),
+    profile: { age: u.age ?? null, height: u.height ?? null, weight: u.weight ?? null, bmi: u.bmi ?? null },
+    // A name that is still the email username does not count as filled in
+    completion: { done: filled.length, total: 4, missing: ['name', 'age', 'height', 'weight'].filter(k => !filled.includes(k)) },
+  }
+}
+const loadMe = id => get('SELECT user_id, name, email, role, age, height, weight, bmi FROM users WHERE user_id = ?', [id])
+
+// GET /api/auth/me — the signed-in account and its profile
 router.get('/me', authenticateToken, (req, res) => {
-  res.json(publicUser(get('SELECT user_id, name, email, role FROM users WHERE user_id = ?', [req.userId])))
+  res.json(profileView(loadMe(req.userId)))
 })
 
-// PATCH /api/auth/me  { name } — sets the display name shown to doctors and in the app (instead of the email username)
+// PATCH /api/auth/me  { name?, age?, height?, weight? } — any subset; null clears a measurement.
+// The display name is shown to doctors and in the app (instead of the email username).
 router.patch('/me', authenticateToken, (req, res) => {
-  const name = cleanText(req.body?.name)
-  if (!name) return res.status(400).json({ error: 'Please enter your name', code: 'NAME_REQUIRED' })
-  if (name.length > MAX_NAME) return res.status(400).json({ error: `Name must be at most ${MAX_NAME} characters`, code: 'NAME_TOO_LONG' })
-  run('UPDATE users SET name = ? WHERE user_id = ?', [name, req.userId])
-  audit({ action: 'profile.name_changed', actorId: req.userId, actorRole: req.userRole, targetType: 'user', targetId: req.userId })
-  res.json(publicUser(get('SELECT user_id, name, email, role FROM users WHERE user_id = ?', [req.userId])))
+  const b = req.body || {}
+  const sets = [], vals = []
+  if ('name' in b) {
+    const name = cleanText(b.name)
+    if (!name) return res.status(400).json({ error: 'Please enter your name', code: 'NAME_REQUIRED', field: 'name' })
+    if (name.length > MAX_NAME) return res.status(400).json({ error: `Name must be at most ${MAX_NAME} characters`, code: 'NAME_TOO_LONG', field: 'name' })
+    sets.push('name = ?'); vals.push(name)
+  }
+  for (const [k, [lo, hi]] of Object.entries(PROFILE_LIMITS)) {
+    if (!(k in b)) continue
+    const v = b[k] === null || b[k] === '' ? null : Number(b[k])
+    if (v !== null && (!Number.isFinite(v) || v < lo || v > hi)) {
+      return res.status(400).json({ error: `${k[0].toUpperCase() + k.slice(1)} must be between ${lo} and ${hi}`, code: 'OUT_OF_RANGE', field: k })
+    }
+    sets.push(`${k} = ?`); vals.push(v === null ? null : (k === 'age' ? Math.round(v) : Math.round(v * 10) / 10))
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Nothing to update', code: 'EMPTY' })
+
+  run(`UPDATE users SET ${sets.join(', ')} WHERE user_id = ?`, [...vals, req.userId])
+  const cur = loadMe(req.userId)
+  run('UPDATE users SET bmi = ? WHERE user_id = ?', [computeBmi(cur.height, cur.weight), req.userId])
+  if ('name' in b) audit({ action: 'profile.name_changed', actorId: req.userId, actorRole: req.userRole, targetType: 'user', targetId: req.userId })
+  if (['age', 'height', 'weight'].some(k => k in b)) audit({ action: 'profile.measurements_changed', actorId: req.userId, actorRole: req.userRole, targetType: 'user', targetId: req.userId })
+  res.json(profileView(loadMe(req.userId)))
 })
 
 export default router

@@ -156,6 +156,7 @@ export function eventIcon(type) {
 export const CATEGORY_LABELS = {
   cycles: 'Cycle history', symptoms: 'Recorded symptoms', pain: 'Pain intensity', wellness: 'Wellness records',
   predictions: 'AI-generated predictions', heat_sessions: 'Heating therapy sessions', tens_sessions: 'TENS sessions (manually recorded)',
+  profile: 'Profile (age, height, weight, BMI)',
 }
 export const PURPOSE_LABELS = { consultation_review: 'Review for my consultation', follow_up_care: 'Follow-up care' }
 

@@ -32,7 +32,8 @@ export const EVENT_TYPES = [
   'reschedule_proposed', 'proposal_accepted', 'proposal_declined', 'completed', 'note_shared', 'follow_up_added',
   'message_sent',
 ]
-export const RECORD_CATEGORIES = ['cycles', 'symptoms', 'pain', 'wellness', 'predictions', 'heat_sessions', 'tens_sessions']
+// 'profile' (age, height, weight, BMI) needs consent records-consent-v2 or later
+export const RECORD_CATEGORIES = ['cycles', 'symptoms', 'pain', 'wellness', 'predictions', 'heat_sessions', 'tens_sessions', 'profile']
 export const GRANT_PURPOSES = ['consultation_review', 'follow_up_care']
 export const AUDIT_EVENTS = [
   'record_viewed', 'grant_created', 'grant_revoked', 'note_created', 'note_visibility_changed', 'note_status_changed',

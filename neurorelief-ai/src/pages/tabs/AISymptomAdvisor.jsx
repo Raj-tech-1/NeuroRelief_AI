@@ -42,16 +42,6 @@ const symptomWeights = {
   'Anxiety': 2, 'Dizziness': 2, 'Insomnia': 1, 'Acne': 0, 'Food cravings': 0,
 }
 
-// Age and BMI from the Profile page, only if that profile was saved by this same account
-function readProfile(userId) {
-  try {
-    const p = JSON.parse(localStorage.getItem('neurorelief_profile') || 'null')
-    if (!p || userId == null || p.owner_id !== userId) return {}
-    const num = (v, lo, hi) => { const n = parseFloat(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : undefined }
-    return { age: num(p.age, 10, 80), bmi: num(p.bmi, 10, 60) }
-  } catch { return {} }
-}
-
 // Map phase names to model input
 const phaseToModel = {
   'Menstrual': 'Menstrual', 'Follicular': 'Follicular',
@@ -85,7 +75,7 @@ function CardHeader({ id, icon, title, subtitle, right }) {
   )
 }
 
-export default function AISymptomAdvisor({ onTabChange }) {
+export default function AISymptomAdvisor({ onTabChange, onOpenProfile }) {
   const { t } = useTranslation()
   const fmt = useFormat()
   const [selectedSymptoms, setSelectedSymptoms] = useState([])
@@ -167,7 +157,6 @@ export default function AISymptomAdvisor({ onTabChange }) {
     // The model's symptom/stress features use a 0-5 scale ("Not at all" .. "Very High"); the app logs 1-10
     const toModelScale = v => Math.max(0, Math.min(5, Math.round(v / 2)))
     const has = name => selectedSymptoms.includes(name)
-    const profile = readProfile(user?.user_id)
     // Poor sleep quality (1-10, today or the 7-day average) feeds the model's "sleep issues" feature (0-5)
     const sleepIssueFromQuality = userContext?.hasMoodData && userContext.sleepQuality != null
       ? toModelScale(10 - userContext.sleepQuality) : 0
@@ -188,9 +177,7 @@ export default function AISymptomAdvisor({ onTabChange }) {
       sleepissue: Math.max(has('Insomnia') ? 4 : 0, sleepIssueFromQuality),
       activity_level: userContext?.energyLevel >= 6 ? 'Moderate' : 'Low',
       mood: { Good: 'Energetic', Sad: 'sad', Angry: 'Moody' }[userContext?.mood] || 'Calm',
-      // From this account's saved profile when set; otherwise the model's defaults
-      bmi: profile.bmi ?? 22,
-      age: profile.age ?? 25,
+      // Age and BMI are not sent: the server takes them from this account's saved profile (defaults if missing)
     }
 
     let prediction
@@ -318,6 +305,12 @@ export default function AISymptomAdvisor({ onTabChange }) {
                   {' • '}{t('advisor.risk')}: <span className={`font-bold ${result.prediction.risk_level === 'high' ? 'text-red-600' : result.prediction.risk_level === 'moderate' ? 'text-orange-600' : 'text-green-600'}`}>{t(`riskLevel.${result.prediction.risk_level}`, { defaultValue: result.prediction.risk_level })}</span>
                   {' • '}{t('advisor.confidence')}: {pct(result.prediction.confidence)}%
                 </p>
+                {(result.prediction.inputs_used?.ageSource === 'default' || result.prediction.inputs_used?.bmiSource === 'default') && (
+                  <p className="text-xs text-gray-500 mt-1.5">
+                    {t('advisor.profileDefaults')}{' '}
+                    {onOpenProfile && <button type="button" onClick={onOpenProfile} className="font-semibold text-brand-700 hover:underline focus:outline-none focus-visible:underline">{t('advisor.completeProfile')}</button>}
+                  </p>
+                )}
               </div>
 
               {result.prediction.risk_level === 'high' && (

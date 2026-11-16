@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Icon } from '../../components/icons'
 import { useFormat } from '../../i18n/format'
-import { getCycleData, getMoodData, getMyBookings, getPredictionHistory, getPastScans } from '../../services/api'
+import { getCycleData, getMoodData, getMyBookings, getPredictionHistory, getPastScans, getMe } from '../../services/api'
 
 // Local calendar date (localToday below), so the daily trackers reset at local midnight, not UTC midnight
 const todayKey = () => localToday()
@@ -70,7 +70,10 @@ function CycleRing({ day, length, phase, daysLate = 0 }) {
   )
 }
 
-export default function Overview({ onTabChange }) {
+export default function Overview({ onTabChange, onOpenProfile, profileVersion = 0 }) {
+  const [me, setMe] = useState(null)
+  // Profile completion; reloaded after the profile is saved (profileVersion changes)
+  useEffect(() => { getMe().then(setMe).catch(() => setMe(null)) }, [profileVersion])
   const navigate = useNavigate()
   const { t } = useTranslation()
   const fmt = useFormat()
@@ -242,6 +245,25 @@ export default function Overview({ onTabChange }) {
           </button>
         </div>
       </section>
+
+      {/* Profile completion (only while something is missing): age and BMI make predictions more personal */}
+      {me && me.completion && me.completion.done < me.completion.total && (
+        <section className={`${card} p-5 flex flex-col sm:flex-row sm:items-center gap-4`} aria-label={t('overview.profileTitle')}>
+          <IconBadge name="users" size={22} />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-900">{t('overview.profileTitle')} <span className="text-brand-700">{t('overview.profileCount', { done: fmt.number(me.completion.done), total: fmt.number(me.completion.total) })}</span></p>
+            <p className="text-sm text-gray-500">{t('overview.profileText', { missing: me.completion.missing.map(k => t(`profile.${k}`)).join(', ') })}</p>
+            <div className="mt-2 h-2 rounded-full bg-brand-50 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={me.completion.total} aria-valuenow={me.completion.done}>
+              <div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 rounded-full" style={{ width: `${(me.completion.done / me.completion.total) * 100}%` }} />
+            </div>
+          </div>
+          {onOpenProfile && (
+            <button onClick={onOpenProfile} className="shrink-0 px-4 py-2.5 bg-brand-700 hover:bg-brand-800 text-white rounded-xl text-sm font-semibold inline-flex items-center gap-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300">
+              {t('overview.profileCta')} <Icon name="arrow" size={16} />
+            </button>
+          )}
+        </section>
+      )}
 
       {/* Stat cards */}
       <section className="indic-2col grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label={t('overview.summary')}>

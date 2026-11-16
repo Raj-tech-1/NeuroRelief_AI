@@ -33,9 +33,8 @@ export async function getPainPrediction(userFeatures) {
         moodswing: userFeatures.moodswing ?? 1,
         sleepissue: userFeatures.sleepissue ?? 1,
         activity_level: userFeatures.activity_level ?? 'Moderate',
-        mood: userFeatures.mood ?? 'Calm',
-        bmi: userFeatures.bmi ?? 22,
-        age: userFeatures.age ?? 25
+        mood: userFeatures.mood ?? 'Calm'
+        // age and BMI: taken by the server from the saved profile
       })
     })
 
