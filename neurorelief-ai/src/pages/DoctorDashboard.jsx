@@ -6,7 +6,7 @@ import { localizeServerMessage } from '../i18n/serverText'
 import LanguageSelector from '../components/LanguageSelector'
 import ServerMessage from '../components/ServerMessage'
 import EnglishOnly from '../components/EnglishOnly'
-import { Icon } from '../components/icons'
+import { Icon, LeafLogo } from '../components/icons'
 import RequestQueue from '../components/doctor/RequestQueue'
 import DoctorCalendar from '../components/doctor/DoctorCalendar'
 import ReportVerification from '../components/doctor/ReportVerification'
@@ -254,10 +254,14 @@ export default function DoctorDashboard() {
 
   const sidebar = (
     <div className="h-full flex flex-col bg-white border-r border-slate-200 px-4 py-5">
-      <p className="flex items-center gap-2.5 px-2 mb-6 text-xl font-extrabold text-[#1f2a44]">
-        <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center" aria-hidden="true"><Icon name="heart" size={19} /></span>
-        <span>NeuroRelief <span className="text-brand-500">AI</span></span>
-      </p>
+      {/* Same lotus logo as the patient sidebar (components/icons LeafLogo) */}
+      <div className="flex items-center gap-3 px-2 mb-6">
+        <LeafLogo size={40} />
+        <div>
+          <p className="text-xl font-extrabold text-[#1f2a44] leading-none">NeuroRelief <span className="text-brand-500">AI</span></p>
+          <p className="text-[11px] text-slate-500 mt-1">Doctor Portal</p>
+        </div>
+      </div>
       <nav className="flex flex-col gap-0.5 overflow-y-auto" aria-label={t('dd.navLabel')}>
         {NAV.map(navButton)}
         <p className="px-3.5 mt-5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Clinical tools</p>
