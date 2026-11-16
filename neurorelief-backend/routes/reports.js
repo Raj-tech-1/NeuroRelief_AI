@@ -17,10 +17,11 @@ export function createReportsRouter({ authenticate, ctx, limits = {} }) {
   const general = createRateLimiter({ windowMs: 60_000, max: limits.generalPerMinute ?? 120 })
   const heavy = createRateLimiter({ windowMs: 10 * 60_000, max: limits.heavyPer10Min ?? 40 })
 
+  // Authenticate first (it only reads headers), so no body is parsed for an anonymous request.
+  router.use(authenticate)
   // Only the upload route takes a large body (a 5 MB PDF is ~6.7 MB as base64); this parser must run first so the small default is skipped.
   router.use('/uploads', json({ limit: '8mb' }))
   router.use(json({ limit: '64kb' }))
-  router.use(authenticate)
   router.use(general)
 
   const patient = requireRole('user')

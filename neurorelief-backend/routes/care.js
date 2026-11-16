@@ -15,8 +15,8 @@ export function createCareRouter({ authenticate, ctx, reportSummary = null, limi
   const general = createRateLimiter({ windowMs: 60_000, max: limits.generalPerMinute ?? 240 })
   const writes = createRateLimiter({ windowMs: 10 * 60_000, max: limits.writesPer10Min ?? 120 })
 
+  router.use(authenticate)   // only reads headers: no body is parsed for an anonymous request
   router.use(json({ limit: '32kb' }))
-  router.use(authenticate)
   router.use(general)
 
   const patient = requireRole('user')

@@ -12,7 +12,7 @@
 import { encrypt, decrypt } from './reportCrypto.js'
 import { getRecordConsent, RECORD_CONSENT_VERSION } from './recordConsent.js'
 import { CLINICAL_SCHEMA_OBJECTS, APPOINTMENT_COLUMNS, RECORD_CATEGORIES, GRANT_PURPOSES } from '../db/clinicalSchema.js'
-import { checkSlot, SlotError, isoDay, TIME_SLOTS, byWhen } from './appointmentRules.js'
+import { checkSlot, SlotError, isoDay, validDate, TIME_SLOTS, byWhen } from './appointmentRules.js'
 
 export class CareError extends Error {
   constructor(status, code, message) { super(message); this.name = 'CareError'; this.status = status; this.code = code }
@@ -581,7 +581,7 @@ export function doctorPatientRecords(ctx, doctorId, patientId, category) {
 // ---------------------------------------------------------------- symptoms (existing table) and therapy sessions
 export function addSymptom(ctx, patientId, body) {
   const { date, type, severity, bodyArea, description } = body || {}
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || date > isoDay(ctx.now())) throw E(400, 'INVALID_INPUT', 'Choose a valid date (not in the future).')
+  if (!validDate(date) || date > isoDay(ctx.now())) throw E(400, 'INVALID_INPUT', 'Choose a valid date (not in the future).')
   const t = cleanText(type, 60)
   if (!t) throw E(400, 'INVALID_INPUT', 'Choose a symptom.')
   if (!Number.isInteger(severity) || severity < 0 || severity > 10) throw E(400, 'INVALID_INPUT', 'Pain intensity must be 0 to 10.')

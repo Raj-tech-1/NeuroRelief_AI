@@ -172,6 +172,22 @@ async function initDB() {
   if (!profileCols.includes('is_demo')) {
     db.run('ALTER TABLE doctor_profiles ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0')
   }
+  // Personal calibration observations (routes/predict.js). base_score is always the RAW model score.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS calibration (
+      cal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      base_score REAL NOT NULL,
+      actual_pain REAL NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  // Migration: predictions.base_severity_score (the raw model score, before personal calibration)
+  const predCols = all('PRAGMA table_info(predictions)').map(c => c.name)
+  if (!predCols.includes('base_severity_score')) {
+    db.run('ALTER TABLE predictions ADD COLUMN base_severity_score REAL')
+  }
+
   // Migration: users.role (existing accounts default to 'user')
   const userCols = all('PRAGMA table_info(users)').map(c => c.name)
   if (!userCols.includes('role')) {

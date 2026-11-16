@@ -13,6 +13,7 @@ import { REPORT_SCHEMA_OBJECTS } from '../db/reportSchema.js'
 import { SCHEMA_002_COLUMNS } from '../db/reportSchema002.js'
 import { decodePdf, cleanFileName, FileError } from './reportFiles.js'
 import crypto from 'node:crypto'
+import { isoDay } from './appointmentRules.js'
 
 export class ServiceError extends Error {
   constructor(status, code, message) { super(message); this.name = 'ServiceError'; this.status = status; this.code = code }
@@ -95,7 +96,7 @@ function openNotes(ctx, shareId, actor) {
   } catch { throw integrityFailure(ctx, actor, { shareId }) }
 }
 
-const today = ctx => ctx.now().toISOString().slice(0, 10)
+const today = ctx => isoDay(ctx.now())
 const wrapSnapshotErrors = fn => { try { return fn() } catch (err) { if (err instanceof SnapshotError) throw E(400, err.code, err.message); throw err } }
 
 // =====================================================================

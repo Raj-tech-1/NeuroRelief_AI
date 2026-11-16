@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { all, get, run } from '../db/database.js'
 import { authenticateToken, requireRole } from '../middleware/auth.js'
+import { isoDay } from '../lib/appointmentRules.js'
 
 const router = Router()
 router.use(authenticateToken)
@@ -12,9 +13,10 @@ router.get('/', (req, res) => {
   let currentData = null
   if (cycles.length > 0) {
     const latest = cycles[0]
-    const startDate = new Date(latest.start_date)
-    const today = new Date()
-    const dayOfCycle = Math.floor((today - startDate) / 86400000) + 1
+    // Whole-day arithmetic on calendar dates: both as UTC midnight, with "today" taken from the LOCAL calendar
+    const startDate = new Date(latest.start_date + 'T00:00:00Z')
+    const today = new Date(isoDay(new Date()) + 'T00:00:00Z')
+    const dayOfCycle = Math.round((today - startDate) / 86400000) + 1
     const cycleLength = latest.cycle_length || 28
 
     let phase = 'Unknown'
@@ -27,7 +29,7 @@ router.get('/', (req, res) => {
     const daysUntilPeriod = Math.max(0, Math.ceil((nextPeriodDate - today) / 86400000))
     const fertileStart = new Date(startDate.getTime() + 8 * 86400000)
     const fertileEnd = new Date(startDate.getTime() + 14 * 86400000)
-    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
     currentData = { currentPhase: phase, dayOfCycle, nextPeriod: daysUntilPeriod, fertileWindow: { start: fmt(fertileStart), end: fmt(fertileEnd) }, lastCycle: latest }
   }

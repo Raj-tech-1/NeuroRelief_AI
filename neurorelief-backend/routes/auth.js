@@ -2,15 +2,29 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { get, run } from '../db/database.js'
 import { generateToken } from '../middleware/auth.js'
+import { createRateLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
 
-// POST /api/auth/register
-router.post('/register', (req, res) => {
-  const { name, email, password } = req.body
-  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' })
+const MIN_PASSWORD = 8
+// Per client IP (these routes are unauthenticated). Slows password guessing; resets on server restart.
+const loginLimit = createRateLimiter({ windowMs: 15 * 60_000, max: 10 })
+const registerLimit = createRateLimiter({ windowMs: 60 * 60_000, max: 10 })
 
-  const existing = get('SELECT user_id FROM users WHERE email = ?', [email])
+// Emails are stored and compared in lower case, so "A@x.com" and "a@x.com" are the same account
+const normEmail = e => (typeof e === 'string' ? e.trim().toLowerCase() : '')
+
+// POST /api/auth/register
+router.post('/register', registerLimit, (req, res) => {
+  const { name, password } = req.body
+  const email = normEmail(req.body.email)
+  if (!email || !password) return res.status(400).json({ error: 'Email and password are required' })
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD) {
+    return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD} characters` })
+  }
+
+  // lower(email): also catches accounts created before emails were normalised
+  const existing = get('SELECT user_id FROM users WHERE lower(email) = ?', [email])
   if (existing) return res.status(409).json({ error: 'Email already registered' })
 
   const password_hash = bcrypt.hashSync(password, 10)
@@ -24,14 +38,16 @@ router.post('/register', (req, res) => {
 })
 
 // POST /api/auth/login
-router.post('/login', (req, res) => {
-  const { email, password } = req.body
+router.post('/login', loginLimit, (req, res) => {
+  const { password } = req.body
+  const email = normEmail(req.body.email)
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' })
 
-  const user = get('SELECT * FROM users WHERE email = ?', [email])
+  // Existing passwords shorter than the new minimum still work here; the minimum applies to new passwords.
+  const user = get('SELECT * FROM users WHERE lower(email) = ?', [email])
   if (!user) return res.status(401).json({ error: 'Invalid email or password' })
 
-  const valid = bcrypt.compareSync(password, user.password_hash)
+  const valid = typeof password === 'string' && bcrypt.compareSync(password, user.password_hash)
   if (!valid) return res.status(401).json({ error: 'Invalid email or password' })
 
   const token = generateToken(user.user_id, user.role)

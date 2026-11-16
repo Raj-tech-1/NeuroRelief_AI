@@ -25,18 +25,18 @@ const PORT = process.env.PORT || 8000
 
 // Middleware
 app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:3000'], credentials: true }))
-// A report PDF upload is base64 JSON (up to ~6.7 MB); only that route gets the larger limit, everything else keeps the default.
-app.use('/api/reports/uploads', express.json({ limit: '8mb' }))
-app.use(express.json())
+// No global body parser: each router parses its own JSON, so the per-router limits in /api/reports (64 KB, 8 MB for
+// uploads) and /api/care (32 KB) really apply, and those two only parse a body AFTER the user is authenticated.
+const json = express.json()   // default 100 KB limit
 
 // Routes
-app.use('/api/auth', authRoutes)
-app.use('/api/cycles', cycleRoutes)
-app.use('/api/mood', moodRoutes)
-app.use('/api/predict', predictRoutes)
-app.use('/api/doctors', doctorRoutes)
-app.use('/api/scans', scanRoutes)
-app.use('/api/assistant', assistantRoutes)
+app.use('/api/auth', json, authRoutes)
+app.use('/api/cycles', json, cycleRoutes)
+app.use('/api/mood', json, moodRoutes)
+app.use('/api/predict', json, predictRoutes)
+app.use('/api/doctors', json, doctorRoutes)
+app.use('/api/scans', json, scanRoutes)
+app.use('/api/assistant', json, assistantRoutes)
 // Report Audit: inert (generic 503) until the report key is configured AND the report tables exist.
 let reportKey = null
 // Encrypted PDF uploads go to a private directory outside the project and OneDrive (override with REPORT_STORAGE_DIR); nothing is created until the first upload.

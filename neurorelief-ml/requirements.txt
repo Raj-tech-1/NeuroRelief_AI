@@ -1,0 +1,12 @@
+# Python packages for the pain model (training script + backend predict.py).
+# scikit-learn must match the version that saved neurorelief_model.pkl (1.9.0), or unpickling may fail or warn.
+# Install into the Python the backend calls (PYTHON_CMD, default "py -3.13"):
+#   py -3.13 -m pip install -r neurorelief-ml/requirements.txt
+scikit-learn==1.9.0
+numpy==2.2.6
+pandas==2.3.1
+scipy==1.16.1
+joblib==1.5.2
+# Only needed to run the training script (charts)
+matplotlib==3.10.5
+seaborn==0.13.2

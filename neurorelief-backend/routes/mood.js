@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { all, get, run } from '../db/database.js'
 import { authenticateToken, requireRole } from '../middleware/auth.js'
+import { isoDay } from '../lib/appointmentRules.js'
 
 const router = Router()
 router.use(authenticateToken)
@@ -8,7 +9,7 @@ router.use(requireRole('user'))   // patient-only: a patient's own records
 
 router.get('/', (req, res) => {
   const records = all('SELECT * FROM wellness_records WHERE user_id = ? ORDER BY date DESC LIMIT 30', [req.userId])
-  const today = new Date().toISOString().split('T')[0]
+  const today = isoDay(new Date())
   const todayEntry = records.find(r => r.date === today) || null
 
   let trend = "Start tracking your mood to see patterns."
@@ -28,7 +29,7 @@ router.get('/', (req, res) => {
   }
 
   // ---- rolling 7-day averages: uses accumulated history, not just today ----
-  const cutoff = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
+  const cutoff = isoDay(new Date(Date.now() - 7 * 86400000))
   const recentRecords = records.filter(r => r.date >= cutoff)
   const avg = (arr, k) => {
     const vals = arr.map(r => r[k]).filter(v => v !== null && v !== undefined)
@@ -55,7 +56,7 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   const { mood, energy, stress, sleep_quality, sleep_hours, note } = req.body
-  const date = new Date().toISOString().split('T')[0]
+  const date = isoDay(new Date())
 
   const existing = get('SELECT record_id FROM wellness_records WHERE user_id = ? AND date = ?', [req.userId, date])
 

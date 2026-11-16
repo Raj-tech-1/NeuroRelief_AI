@@ -23,7 +23,10 @@ export function weekdayOf(dateStr) {
   return WEEKDAYS[new Date(dateStr + 'T00:00:00Z').getUTCDay()]
 }
 
-export const isoDay = (date) => date.toISOString().split('T')[0]
+// The calendar date (YYYY-MM-DD) in the server's local timezone. toISOString() would give the UTC date, which is
+// still "yesterday" in India before 05:30 local time.
+export const isoDay = (date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 export class SlotError extends Error {
   constructor(status, code, message) { super(message); this.name = 'SlotError'; this.status = status; this.code = code }
