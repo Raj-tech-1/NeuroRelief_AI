@@ -14,6 +14,7 @@ import Overview from './tabs/Overview'
 import CycleTracking from './tabs/CycleTracking'
 import MoodWellness from './tabs/MoodWellness'
 import AISymptomAdvisor from './tabs/AISymptomAdvisor'
+import ReliefJournal from './tabs/ReliefJournal'
 import DoctorConnect from './tabs/DoctorConnect'
 import ReportAudit from './tabs/ReportAudit'
 import DevicePanel from './tabs/DevicePanel'
@@ -28,6 +29,7 @@ const tabComponents = {
   cycle: CycleTracking,
   mood: MoodWellness,
   symptom: AISymptomAdvisor,
+  journal: ReliefJournal,
   doctor: DoctorConnect,
   audit: ReportAudit,
   device: DevicePanel,
@@ -41,6 +43,7 @@ const NAV = [
   { id: 'cycle', icon: 'calendar' },
   { id: 'mood', icon: 'heart' },
   { id: 'symptom', icon: 'brain' },
+  { id: 'journal', icon: 'leaf' },
   { id: 'doctor', icon: 'stethoscope' },
   { id: 'audit', icon: 'doc' },
   { id: 'device', icon: 'device' },

@@ -219,6 +219,24 @@ async function initDB() {
   db.run("CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END")
   db.run("CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit log entries cannot be deleted'); END")
 
+  // Relief Journal (lib/journalService.js): what the patient tried and how pain changed. There is deliberately NO dose
+  // column: medicines are logged by name and time only. Medicine name and note are stored encrypted (AES-256-GCM).
+  db.run(`
+    CREATE TABLE IF NOT EXISTS relief_entries (
+      entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      occurred_at TEXT NOT NULL CHECK (occurred_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]'),
+      pain_before INTEGER NOT NULL CHECK (pain_before BETWEEN 0 AND 10),
+      pain_after INTEGER CHECK (pain_after IS NULL OR pain_after BETWEEN 0 AND 10),
+      methods TEXT NOT NULL CHECK (length(methods) BETWEEN 1 AND 120 AND methods NOT GLOB '*[^a-z,]*'),
+      medicine_taken_at TEXT CHECK (medicine_taken_at IS NULL OR medicine_taken_at GLOB '[0-9][0-9]:[0-9][0-9]'),
+      ciphertext BLOB, iv BLOB, auth_tag BLOB, key_id TEXT,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(user_id)
+    )
+  `)
+  db.run('CREATE INDEX IF NOT EXISTS idx_relief_user ON relief_entries(user_id, occurred_at)')
+
   // Migration: users.role (existing accounts default to 'user')
   const userCols = all('PRAGMA table_info(users)').map(c => c.name)
   if (!userCols.includes('role')) {

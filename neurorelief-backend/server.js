@@ -20,6 +20,7 @@ import doctorRoutes from './routes/doctors.js'
 import scanRoutes from './routes/scans.js'
 import assistantRoutes from './routes/assistant.js'
 import adminRoutes from './routes/admin.js'
+import { createJournalRouter } from './routes/journal.js'
 
 const app = express()
 const PORT = process.env.PORT || 8000
@@ -64,6 +65,13 @@ app.use('/api/care', createCareRouter({
   ctx: { db: { all, get, run, transaction }, key: () => (reportKey ??= loadMasterKey()), now: () => new Date() },
   // Reports awaiting review for the doctor dashboard, only when Report Audit itself is enabled
   reportSummary: doctorId => (reportSvc.featureStatus(reportCtx).enabled ? reportSvc.doctorInboxSummary(reportCtx, doctorId) : null),
+}))
+
+// Relief Journal (patients). Medicine names and notes are encrypted with the same key as Report Audit; without the key,
+// entries can still be saved without those fields.
+app.use('/api/journal', createJournalRouter({
+  authenticate: authenticateToken,
+  ctx: { db: { all, get, run, transaction }, key: () => (reportKey ??= loadMasterKey()), now: () => new Date() },
 }))
 
 // Health check

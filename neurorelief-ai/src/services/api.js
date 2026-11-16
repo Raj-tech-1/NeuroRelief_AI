@@ -350,6 +350,12 @@ export const getMyBookings = () => doctorRequest('GET', '/bookings')
 export const requestAppointment = body => doctorRequest('POST', '/book', body)
 export const cancelBooking = id => doctorRequest('POST', `/bookings/${id}/cancel`)
 
+// ─── Relief Journal (patient's own; medicine by name and time only, no dose) ───
+export const getJournal = () => jsonRequest('GET', '/journal')
+export const addJournalEntry = body => jsonRequest('POST', '/journal', body)
+export const setJournalPainAfter = (id, painAfter) => jsonRequest('PATCH', `/journal/${id}`, { painAfter })
+export const deleteJournalEntry = id => jsonRequest('DELETE', `/journal/${id}`)
+
 // ─── 7-day pain estimate (AI model, built on the server; nothing saved) ───
 export async function getPainForecast() {
   return okJson(await fetch(`${BASE_URL}/predict/forecast`, { headers: headers() }))

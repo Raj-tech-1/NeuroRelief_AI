@@ -18,7 +18,8 @@
     "logout": "Logout",
     "openMenu": "Open menu",
     "closeMenu": "Close menu",
-    "audit": "Report Audit"
+    "audit": "Report Audit",
+    "journal": "Relief Journal"
   },
   "navSub": {
     "overview": "Your health at a glance",
@@ -29,7 +30,8 @@
     "device": "TENS and heat therapy",
     "device3d": "Interactive 3D view of the prototype hardware (educational demo)",
     "learn": "Guides and resources",
-    "audit": "Create health reports and share them with your doctor"
+    "audit": "Create health reports and share them with your doctor",
+    "journal": "What helped your pain"
   },
   "header": {
     "hi": "Hi, {{name}}",
@@ -1612,5 +1614,52 @@
     "projected": "Assumes your next period starts on time.",
     "basis": "Estimate only, not a diagnosis. Based on your cycle and {{n}} check-ins from the last 7 days; future symptoms are not known, so they are not included.",
     "calibrated": "Adjusted by your personal calibration."
+  },
+  "journal": {
+    "tagline": "Your relief log",
+    "title": "Relief Journal",
+    "heroText": "Note what you tried and how your pain changed. Over time you can see what tends to help you.",
+    "newEntry": "New entry",
+    "when": "When",
+    "painBefore": "Pain before (0-10)",
+    "painAfter": "Pain after (0-10)",
+    "later": "Later",
+    "whatTried": "What did you try?",
+    "medicineTitle": "Medicine (optional)",
+    "medicineName": "Medicine name",
+    "medicineTime": "Time taken",
+    "noDosing": "Name and time only. NeuroRelief does not give dosing advice — follow your doctor's or the label's instructions.",
+    "note": "Note (optional)",
+    "notePh": "Anything you want to remember",
+    "privateHint": "Medicine names and notes are stored encrypted.",
+    "save": "Save entry",
+    "saved": "Entry saved.",
+    "saveFailed": "Could not save. Please try again.",
+    "loadFailed": "Could not load your journal.",
+    "pickMethod": "Choose at least one thing you tried.",
+    "noEncryption": "Medicine names and notes can't be saved right now. Remove them to save the entry, or try again later.",
+    "helpedTitle": "What has helped you",
+    "helpedHint": "Average change in your own ratings (before minus after). Describes your entries only — not medical advice.",
+    "helpedEmpty": "Add a pain-after rating to your entries to see this.",
+    "avgChange_one": "{{change}} points lower · {{count}} entry",
+    "avgChange_other": "{{change}} points lower · {{count}} entries",
+    "historyTitle": "History",
+    "empty": "No entries yet.",
+    "painShort": "pain",
+    "fromDevice": "Device panel",
+    "medicineLine": "Medicine: {{name}}",
+    "deviceHeat": "Heat {{temp}}°C · {{min}} min",
+    "privateUnavailable": "Medicine and note can't be shown right now.",
+    "addAfter": "Add pain after",
+    "delete": "Delete entry",
+    "method": {
+      "heat": "Heat",
+      "tens": "TENS",
+      "rest": "Rest",
+      "stretching": "Stretching",
+      "hydration": "Hydration",
+      "medicine": "Medicine",
+      "other": "Other"
+    }
   }
 }
