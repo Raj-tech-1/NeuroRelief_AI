@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-import { loginUser, registerUser } from '../services/api'
+import { loginUser, registerUser, applyAsDoctor } from '../services/api'
 import { readSession, writeSession, clearSession, onSessionLogout, patchSession } from '../services/session'
 
 const AuthContext = createContext(null)
@@ -18,11 +18,21 @@ export function AuthProvider({ children }) {
 
   // expectedRole (optional): used by the Doctor Portal. A valid account with a different role is
   // refused BEFORE any session is stored. This is a UX check only; the backend enforces roles.
+  // expectedRole may be one role or a list (the Doctor Portal accepts doctors and doctor applicants)
   async function login(email, password, expectedRole, opts) {
     const userData = await loginUser(email, password)
-    if (expectedRole && userData.role !== expectedRole) {
+    const allowed = expectedRole == null ? null : [].concat(expectedRole)
+    if (allowed && !allowed.includes(userData.role)) {
       throw new Error('This account is not a doctor account. Please use the patient sign in.')
     }
+    setUser(userData)
+    writeSession(userData, opts)
+    return userData
+  }
+
+  // Public doctor application: the new account (role 'doctor_applicant') is signed in to see its status
+  async function applyDoctor(fields, opts) {
+    const userData = await applyAsDoctor(fields)
     setUser(userData)
     writeSession(userData, opts)
     return userData
@@ -47,7 +57,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, applyDoctor, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )

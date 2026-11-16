@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import LanguageSelector from '../components/LanguageSelector'
 import ServerMessage from '../components/ServerMessage'
 import { LeafLogo } from '../components/icons'
 import { useAuth } from '../context/AuthContext'
-import { homeForRole } from '../utils/roles'
+import { homeForRole, DOCTOR_PORTAL_ROLES } from '../utils/roles'
 import heroArt from '../assets/illustrations/auth-botanical.svg'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -120,7 +120,8 @@ export default function AuthPage() {
 
   const { login, register, user } = useAuth()
   const navigate = useNavigate()
-  // /auth?portal=doctor shows the Doctor Portal sign-in (sign in only; doctor accounts are provisioned, never self-registered)
+  // /auth?portal=doctor shows the Doctor Portal sign-in. New doctors apply at /doctor/apply and get doctor access only
+  // after an admin verifies their registration number.
   const [searchParams, setSearchParams] = useSearchParams()
   const doctorMode = searchParams.get('portal') === 'doctor'
 
@@ -128,7 +129,7 @@ export default function AuthPage() {
   // (a saved session without a recognised role stays on this page so the user can sign in again)
   // Exception: the Doctor Portal sign-in stays available in a tab signed in to another account, so a doctor can sign in
   // in a new tab without logging the patient out (each tab keeps its own session; see services/session.js).
-  const switchingToDoctor = doctorMode && user && user.role !== 'doctor'
+  const switchingToDoctor = doctorMode && user && !DOCTOR_PORTAL_ROLES.includes(user.role)
   const homeRoute = user && !switchingToDoctor ? homeForRole(user.role) : null
   if (homeRoute) { navigate(homeRoute, { replace: true }); return null }
 
@@ -144,7 +145,7 @@ export default function AuthPage() {
     try {
       const userData = isSignUp
         ? await register(email, password, { remember })
-        : await login(email, password, doctorMode ? 'doctor' : undefined, { remember })
+        : await login(email, password, doctorMode ? DOCTOR_PORTAL_ROLES : undefined, { remember })
       const destination = homeForRole(userData?.role)
       if (!destination) { setError({ key: 'auth.err.roleUnknown' }); return }
       navigate(destination)
@@ -303,7 +304,14 @@ export default function AuthPage() {
             {notice === 'google' && <div className="mt-3"><Notice>{t('login.googleInfo')}</Notice></div>}
 
             <p className="mt-6 text-center text-sm text-gray-600">
-              {doctorMode ? t('login.doctorNoSignup') : (
+              {doctorMode ? (
+                <>
+                  {t('login.doctorApplyPrompt')}{' '}
+                  <Link to="/doctor/apply" className="font-semibold text-brand-600 hover:text-brand-800 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
+                    {t('login.doctorApplyLink')}
+                  </Link>
+                </>
+              ) : (
                 <>
                   {isSignUp ? t('login.haveAccount') : t('login.noAccount')}{' '}
                   <button type="button" onClick={() => switchMode(!isSignUp)}

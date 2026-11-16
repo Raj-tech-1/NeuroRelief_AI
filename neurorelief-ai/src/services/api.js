@@ -63,6 +63,31 @@ export async function updateMyName(name) {
   return okJson(res)
 }
 
+// ─── Doctor application (public) and admin review ────
+// Errors carry .status, plus .field / .code from the server so the form can point at the right input.
+async function jsonRequest(method, path, body, withAuth = true) {
+  let res
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { method, headers: headers(withAuth), body: body ? JSON.stringify(body) : undefined })
+  } catch {
+    const err = new Error('Could not reach the server. Please check your connection and try again.'); err.code = 'network'; throw err
+  }
+  let data = null
+  try { data = await res.json() } catch { /* empty body */ }
+  if (!res.ok) {
+    const err = new Error(data?.error || `Request failed (${res.status})`)
+    err.status = res.status; err.code = data?.code || null; err.field = data?.field || null
+    throw err
+  }
+  return data
+}
+export const applyAsDoctor = body => jsonRequest('POST', '/auth/doctor-apply', body, false)
+export const getMyDoctorApplication = () => jsonRequest('GET', '/auth/doctor-application')
+export const getDoctorApplications = (status = 'pending') => jsonRequest('GET', `/admin/doctor-applications?status=${encodeURIComponent(status)}`)
+export const approveDoctorApplication = userId => jsonRequest('POST', `/admin/doctor-applications/${userId}/approve`)
+export const rejectDoctorApplication = (userId, reason) => jsonRequest('POST', `/admin/doctor-applications/${userId}/reject`, { reason })
+export const getAuditLog = (limit = 100) => jsonRequest('GET', `/admin/audit?limit=${limit}`)
+
 // ─── Cycle Data ──────────────────────────────────────
 export async function getCycleData(userId) {
   const res = await fetch(`${BASE_URL}/cycles`, { headers: headers() })

@@ -6,8 +6,10 @@ import Dashboard from './pages/Dashboard'
 import ScanPage from './pages/ScanPage'
 import PastScansPage from './pages/PastScansPage'
 import AnalyzeReportPage from './pages/AnalyzeReportPage'
-import RoleHome from './pages/RoleHome'
 import DoctorDashboard from './pages/DoctorDashboard'
+import DoctorApplyPage from './pages/DoctorApplyPage'
+import DoctorApplicationStatus from './pages/DoctorApplicationStatus'
+import AdminDashboard from './pages/AdminDashboard'
 import { homeForRole } from './utils/roles'
 
 // UI guard only: real access control is enforced by the backend.
@@ -25,7 +27,6 @@ function ProtectedRoute({ children, roles }) {
 }
 
 export default function App() {
-  const { t } = useTranslation()
   return (
     <Routes>
       <Route path="/auth" element={<AuthPage />} />
@@ -34,7 +35,9 @@ export default function App() {
       <Route path="/past-scans" element={<ProtectedRoute roles={['user']}><PastScansPage /></ProtectedRoute>} />
       <Route path="/analyze-report" element={<ProtectedRoute roles={['user']}><AnalyzeReportPage /></ProtectedRoute>} />
       <Route path="/doctor" element={<ProtectedRoute roles={['doctor']}><DoctorDashboard /></ProtectedRoute>} />
-      <Route path="/admin" element={<ProtectedRoute roles={['admin']}><RoleHome title={t('role.adminArea')} /></ProtectedRoute>} />
+      <Route path="/doctor/apply" element={<DoctorApplyPage />} />
+      <Route path="/doctor/application" element={<ProtectedRoute roles={['doctor_applicant']}><DoctorApplicationStatus /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/auth" replace />} />
     </Routes>
   )

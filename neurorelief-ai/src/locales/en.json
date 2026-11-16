@@ -1524,6 +1524,8 @@
     "haveAccount": "Already have an account?",
     "logIn": "Log in",
     "doctorNoSignup": "Doctor accounts are created by the clinic.",
-    "switching": "This tab is signed in as {{name}}. Signing in here switches only this tab to the doctor account."
+    "switching": "This tab is signed in as {{name}}. Signing in here switches only this tab to the doctor account.",
+    "doctorApplyPrompt": "New doctor?",
+    "doctorApplyLink": "Apply for verification"
   }
 }

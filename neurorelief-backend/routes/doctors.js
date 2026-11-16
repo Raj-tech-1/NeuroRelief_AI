@@ -55,7 +55,10 @@ export function createDoctorsRouter({ db = { all, get, run, transaction }, authe
 
   // GET /api/doctors — every profile is backed by a doctor account and is bookable; demo clinicians carry demo: true
   router.get('/', (req, res) => {
-    res.json(db.all('SELECT * FROM doctor_profiles ORDER BY display_name').map(profileToPublic))
+    // Only verified doctors: pending/rejected applicants are never listed (their accounts are not role 'doctor')
+    res.json(db.all(
+      `SELECT p.* FROM doctor_profiles p JOIN users u ON u.user_id = p.user_id AND u.role = 'doctor'
+       WHERE COALESCE(p.verification_status, 'approved') = 'approved' ORDER BY p.display_name`).map(profileToPublic))
   })
 
   // ---------------- Patient endpoints ----------------

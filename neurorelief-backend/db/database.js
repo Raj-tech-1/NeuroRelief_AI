@@ -188,6 +188,37 @@ async function initDB() {
     db.run('ALTER TABLE predictions ADD COLUMN base_severity_score REAL')
   }
 
+  // Migration: doctor verification. Existing and script-provisioned doctors are 'approved'; a public application
+  // (POST /api/auth/doctor-apply) is 'pending' and its account has role 'doctor_applicant' until an admin approves it.
+  const docCols = all('PRAGMA table_info(doctor_profiles)').map(c => c.name)
+  const addDocCol = (name, def) => { if (!docCols.includes(name)) db.run(`ALTER TABLE doctor_profiles ADD COLUMN ${name} ${def}`) }
+  addDocCol('verification_status', "TEXT NOT NULL DEFAULT 'approved'")   // pending | approved | rejected
+  addDocCol('licence_number', 'TEXT')          // medical registration / licence number (checked manually by an admin)
+  addDocCol('licence_authority', 'TEXT')       // issuing council, e.g. a State Medical Council
+  addDocCol('applied_at', 'DATETIME')
+  addDocCol('reviewed_at', 'DATETIME')
+  addDocCol('reviewed_by', 'INTEGER')
+  addDocCol('review_reason', 'TEXT')           // rejection reason code
+  db.run('CREATE UNIQUE INDEX IF NOT EXISTS uq_doctor_licence ON doctor_profiles(licence_number) WHERE licence_number IS NOT NULL')
+
+  // General audit log: append-only, codes only (never emails, passwords or health content)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action TEXT NOT NULL CHECK (length(action) <= 40 AND action NOT GLOB '*[^a-z0-9_.]*'),
+      outcome TEXT NOT NULL DEFAULT 'ok' CHECK (outcome IN ('ok','denied','failed')),
+      actor_user_id INTEGER,
+      actor_role TEXT,
+      target_type TEXT CHECK (target_type IS NULL OR target_type IN ('user','doctor_profile')),
+      target_id INTEGER,
+      detail_code TEXT CHECK (detail_code IS NULL OR (length(detail_code) <= 40 AND detail_code NOT GLOB '*[^a-z0-9_.-]*')),
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  db.run('CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at)')
+  db.run("CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_update BEFORE UPDATE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END")
+  db.run("CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_delete BEFORE DELETE ON audit_log BEGIN SELECT RAISE(ABORT, 'audit log entries cannot be deleted'); END")
+
   // Migration: users.role (existing accounts default to 'user')
   const userCols = all('PRAGMA table_info(users)').map(c => c.name)
   if (!userCols.includes('role')) {

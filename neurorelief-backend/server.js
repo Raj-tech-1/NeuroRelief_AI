@@ -19,6 +19,7 @@ import predictRoutes from './routes/predict.js'
 import doctorRoutes from './routes/doctors.js'
 import scanRoutes from './routes/scans.js'
 import assistantRoutes from './routes/assistant.js'
+import adminRoutes from './routes/admin.js'
 
 const app = express()
 const PORT = process.env.PORT || 8000
@@ -37,6 +38,7 @@ app.use('/api/predict', json, predictRoutes)
 app.use('/api/doctors', json, doctorRoutes)
 app.use('/api/scans', json, scanRoutes)
 app.use('/api/assistant', json, assistantRoutes)
+app.use('/api/admin', json, adminRoutes)
 // Report Audit: inert (generic 503) until the report key is configured AND the report tables exist.
 let reportKey = null
 // Encrypted PDF uploads go to a private directory outside the project and OneDrive (override with REPORT_STORAGE_DIR); nothing is created until the first upload.

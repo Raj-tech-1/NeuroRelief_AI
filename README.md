@@ -117,6 +117,21 @@ Demo doctor sign-in emails are `ananya.rao@demo.neurorelief.invalid`, `priya.sha
 
 To create your own doctor account instead, see the usage notes at the top of `scripts/seed-user.js`.
 
+### Doctor applications and the admin account
+
+Doctors can apply publicly at `/doctor/apply` (linked from the Doctor Portal sign-in). A medical registration / licence number is required. The new account has **no doctor access** (role `doctor_applicant`, not listed, cannot be booked or receive data) until an administrator approves it.
+
+Admins can only be created with the seed script (stop the backend first):
+
+```powershell
+cd neurorelief-backend
+$env:SEED_EMAIL='admin@example.com'; $env:SEED_PASSWORD='choose-a-long-password'; $env:SEED_ROLE='admin'
+node scripts/seed-user.js
+Remove-Item Env:SEED_PASSWORD
+```
+
+Sign in with the patient sign-in; you land on `/admin`, where you check each registration number with the issuing council, then approve or reject it (with a reason), and can read the append-only audit log (codes only, no emails or health data).
+
 ### Voice/chat assistant
 
 Add `GEMINI_API_KEY=...` to `neurorelief-backend/.env` and restart the backend. Without a key the assistant reports that it is not configured; everything else works.
