@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { getMyBookings, getCareActivity } from '../services/api'
 import { useCareStatus, eventText, ago } from '../components/care/shared'
 import PatientChatWidget from '../components/care/PatientChatWidget'
+import { initials as nameInitials } from '../components/doctor/helpers'
 import { Icon, LeafLogo } from '../components/icons'
 import LanguageSelector from '../components/LanguageSelector'
 import { useFormat } from '../i18n/format'
@@ -71,7 +72,7 @@ export default function Dashboard() {
   const current = NAV.find(n => n.id === activeTab)
   const fitScreen = (activeTab === 'symptom' || activeTab === 'doctor' || activeTab === 'device') && !showProfile
   const firstName = (user?.name || user?.email || t('header.there')).split(/[\s@]/)[0]
-  const initials = (user?.name || user?.email || 'NR').split(/[\s@._]+/).filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase()
+  const initials = user?.name || user?.email ? nameInitials(user.name || user.email) : 'NR'
 
   // Doctor responses (accepted / declined) show up as notifications; refreshed every 30s and on focus
   const loadBookings = useCallback(() => {

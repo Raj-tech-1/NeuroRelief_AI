@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from '../icons'
 import { getConversations } from '../../services/api'
+import { initials } from '../doctor/helpers'
 import { useCareStatus, usePolled, MessageThread, ErrorNote, Loading, fmtDay, ago } from './shared'
 
 // Other parts of the patient portal can open the chat on a given appointment:
@@ -8,7 +9,6 @@ import { useCareStatus, usePolled, MessageThread, ErrorNote, Loading, fmtDay, ag
 export const OPEN_CHAT_EVENT = 'nr:open-doctor-chat'
 export const openDoctorChat = appointmentId => window.dispatchEvent(new CustomEvent(OPEN_CHAT_EVENT, { detail: { appointmentId } }))
 
-const initials = n => (n || '?').replace(/^Dr\.?\s+/i, '').split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
 
 function statusLine(c) {
   if (c.status === 'pending') return 'Request pending: your doctor can reply'

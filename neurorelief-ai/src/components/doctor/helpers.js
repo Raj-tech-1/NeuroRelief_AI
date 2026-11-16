@@ -29,8 +29,13 @@ export function isStillAhead(r, now = new Date()) {
   return minutesOf(r.time) >= now.getHours() * 60 + now.getMinutes()
 }
 
+// Honorifics are skipped, so "Dr. Meera Iyer" -> "MI" (not "DI"). An email falls back to its local part.
+const TITLES = /^(dr|prof|mr|mrs|ms|miss|mx|smt|shri|sri)\.?$/i
 export function initials(name) {
-  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
+  const base = String(name || '').trim().split('@')[0]
+  const parts = base.split(/[\s._-]+/).filter(Boolean)
+  const named = parts.filter(p => !TITLES.test(p))
+  if (named.length) parts.splice(0, parts.length, ...named)
   if (!parts.length) return '?'
   const first = Array.from(parts[0])[0]
   const last = parts.length > 1 ? Array.from(parts[parts.length - 1])[0] : ''
