@@ -178,7 +178,12 @@ export default function Overview({ onTabChange }) {
     {
       icon: 'chart', tone: 'bg-brand-50 text-brand-600', label: t('overview.latestPrediction'),
       value: latestPred ? tSeverity(latestPred.predicted_severity) : t('overview.notAvailable'), small: !latestPred,
-      sub: latestPred ? `${fmtDate(latestPred.created_at || latestPred.date)}` : t('overview.logToPredict'),
+      // How old the prediction is ("17 days ago — update"); the card opens the advisor
+      sub: latestPred ? (() => {
+        const ts = parseTs(latestPred.created_at || latestPred.date)
+        if (!ts) return fmtDate(latestPred.created_at || latestPred.date)
+        return fmt.daysSince(ts) >= 1 ? t('overview.predAgeUpdate', { age: fmt.daysAgo(ts) }) : fmt.daysAgo(ts)
+      })() : t('overview.logToPredict'),
       onClick: () => onTabChange('symptom'),
     },
   ]

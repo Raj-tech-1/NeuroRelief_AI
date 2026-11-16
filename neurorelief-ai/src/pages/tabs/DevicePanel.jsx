@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext'
 const BASE_URL = 'http://localhost:8000/api'
 const getToken = getSessionToken
 
-export default function DevicePanel() {
+export default function DevicePanel({ onTabChange }) {
   const { t } = useTranslation()
   const fmt = useFormat()
   const { user } = useAuth()
@@ -248,6 +248,14 @@ export default function DevicePanel() {
                   <div className="mr-auto min-w-0">
                     <h3 className="font-bold text-gray-900 text-sm leading-tight">{t('device.aiTitle')}</h3>
                     <span className="inline-block mt-0.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">{t('advisor.pred', { severity: t(`severity.${lastPrediction.predicted_severity}`, { defaultValue: lastPrediction.predicted_severity }) })}</span>
+                    {lastPrediction.made_at && (
+                      <span className="ml-2 text-[11px] text-gray-500">
+                        {fmt.daysAgo(lastPrediction.made_at)}
+                        {fmt.daysSince(lastPrediction.made_at) >= 1 && onTabChange && (
+                          <> · <button type="button" onClick={() => onTabChange('symptom')} className="font-semibold text-brand-700 hover:underline focus:outline-none focus-visible:underline">{t('device.updatePrediction')}</button></>
+                        )}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-700 font-medium">
                     {lastPrediction.recommended_tens_intensity}% · {lastPrediction.recommended_tens_frequency} Hz · {lastPrediction.recommended_heat_temp}°C

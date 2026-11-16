@@ -1,6 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { getLanguage } from './languages'
 
+const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+const daysBetween = ts => Math.round((startOfDay(new Date()) - startOfDay(new Date(ts))) / 86400000)
+
 // Locale-aware formatting. Values stay in their internal form (ISO dates, numbers);
 // only the displayed string changes with the selected language.
 export function useFormat() {
@@ -24,6 +27,10 @@ export function useFormat() {
       return i < 0 ? name : new Date(2023, 0, 1 + i).toLocaleDateString(locale, { weekday: 'short' })
     },
     dateTime: ts => (ts ? new Date(ts).toLocaleString(locale) : ''),
+    // Whole LOCAL calendar days between ts (ms) and now: 0 = today, 1 = yesterday, ...
+    daysSince: ts => (ts ? daysBetween(ts) : null),
+    // "today" / "yesterday" / "17 days ago" in the selected language
+    daysAgo: ts => (ts ? new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(-Math.max(0, daysBetween(ts)), 'day') : ''),
     // 'YYYY-MM-DD' strings from the API -> localized date; any other value (e.g. '-') is returned unchanged
     isoDate: s => (/^\d{4}-\d{2}-\d{2}$/.test(s || '') ? new Date(s + 'T12:00:00').toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' }) : s),
   }

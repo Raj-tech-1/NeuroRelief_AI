@@ -157,7 +157,8 @@
     "daysLate_one": "day late",
     "daysLate_other": "days late",
     "lateStatus_one": "Period late by {{count}} day. Log it when it starts.",
-    "lateStatus_other": "Period late by {{count}} days. Log it when it starts."
+    "lateStatus_other": "Period late by {{count}} days. Log it when it starts.",
+    "predAgeUpdate": "{{age}} — update"
   },
   "common": {
     "englishOnly": "English only",
@@ -812,7 +813,8 @@
     "calSection": "Personal calibration",
     "calActiveHigher": "Personal calibration active. Across your last {{sessions}} sessions you reported pain {{offset}} higher than the model predicted, so predictions are shifted up to match you.",
     "calActiveLower": "Personal calibration active. Across your last {{sessions}} sessions you reported pain {{offset}} lower than the model predicted, so predictions are shifted down to match you.",
-    "calInactive": "Personal calibration: {{n}} of {{needed}} sessions recorded. Rate your pain after each session to tune predictions to you."
+    "calInactive": "Personal calibration: {{n}} of {{needed}} sessions recorded. Rate your pain after each session to tune predictions to you.",
+    "updatePrediction": "Update"
   },
   "learn": {
     "title": "Educational Content",

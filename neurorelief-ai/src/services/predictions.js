@@ -77,7 +77,7 @@ const LAST_PREDICTION_KEY = 'neurorelief_last_prediction'
 
 // Saves the latest prediction for the Device Panel, tagged with the account it belongs to
 export function storePrediction(prediction, userId) {
-  try { localStorage.setItem(LAST_PREDICTION_KEY, JSON.stringify({ ...prediction, owner_id: userId })) } catch { /* storage unavailable */ }
+  try { localStorage.setItem(LAST_PREDICTION_KEY, JSON.stringify({ ...prediction, owner_id: userId, made_at: Date.now() })) } catch { /* storage unavailable */ }
 }
 
 export function clearStoredPrediction() {
