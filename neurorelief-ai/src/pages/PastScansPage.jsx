@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Spinner from '../components/Spinner'
 import { getPastScans } from '../services/api'
+import { toDate } from '../components/care/shared'   // SQLite timestamps are UTC
 
 export default function PastScansPage() {
   const navigate = useNavigate()
@@ -56,7 +57,7 @@ export default function PastScansPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <p className="text-gray-500">Date:</p>
-                    <p className="font-medium">{new Date(selectedScan.created_at).toLocaleString()}</p>
+                    <p className="font-medium">{toDate(selectedScan.created_at).toLocaleString()}</p>
                     <p className="text-gray-500">Life Stage:</p>
                     <p className="font-medium">{selectedScan.life_stage}</p>
                     <p className="text-gray-500">Body Areas:</p>
@@ -84,7 +85,7 @@ export default function PastScansPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {scans.map(scan => (
                   <div key={scan.scan_id} className="border border-gray-100 rounded-xl p-4 text-center hover:bg-gray-50 transition">
-                    <p className="text-xs text-gray-400 mb-2">{new Date(scan.created_at).toLocaleString()}</p>
+                    <p className="text-xs text-gray-400 mb-2">{toDate(scan.created_at).toLocaleString()}</p>
                     <p className="text-xs text-brand-600 font-semibold">LIFE STAGE</p>
                     <p className="text-sm mb-2">{scan.life_stage}</p>
                     <p className="text-xs text-brand-600 font-semibold">AREA OF CONCERN</p>

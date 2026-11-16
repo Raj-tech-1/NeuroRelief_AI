@@ -20,21 +20,22 @@ export async function getPainPrediction(userFeatures) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
+      // ?? (not ||): 0 is a real value on the model's 0-5 symptom scale ("Not at all") and must not become a default
       body: JSON.stringify({
-        phase: userFeatures.phase || 'Follicular',
-        day_from_last_menses: userFeatures.cycle_day || 14,
-        sleep_hours: userFeatures.sleep_hours || 7,
-        stress: userFeatures.stress_level || 3,
-        fatigue: userFeatures.fatigue || 2,
-        cramps: userFeatures.cramps || 2,
-        headaches: userFeatures.headaches || 1,
-        bloating: userFeatures.bloating || 1,
-        moodswing: userFeatures.moodswing || 1,
-        sleepissue: userFeatures.sleepissue || 1,
-        activity_level: userFeatures.activity_level || 'Moderate',
-        mood: userFeatures.mood || 'Calm',
-        bmi: userFeatures.bmi || 22,
-        age: userFeatures.age || 25
+        phase: userFeatures.phase ?? 'Follicular',
+        day_from_last_menses: userFeatures.cycle_day ?? 14,
+        sleep_hours: userFeatures.sleep_hours ?? 7,
+        stress: userFeatures.stress_level ?? 3,
+        fatigue: userFeatures.fatigue ?? 2,
+        cramps: userFeatures.cramps ?? 2,
+        headaches: userFeatures.headaches ?? 1,
+        bloating: userFeatures.bloating ?? 1,
+        moodswing: userFeatures.moodswing ?? 1,
+        sleepissue: userFeatures.sleepissue ?? 1,
+        activity_level: userFeatures.activity_level ?? 'Moderate',
+        mood: userFeatures.mood ?? 'Calm',
+        bmi: userFeatures.bmi ?? 22,
+        age: userFeatures.age ?? 25
       })
     })
 
@@ -72,15 +73,29 @@ export class PredictionError extends Error {
   }
 }
 
-// Only a prediction produced by the real model (it carries `probabilities`) may drive the Device Panel
-export function readStoredPrediction() {
+const LAST_PREDICTION_KEY = 'neurorelief_last_prediction'
+
+// Saves the latest prediction for the Device Panel, tagged with the account it belongs to
+export function storePrediction(prediction, userId) {
+  try { localStorage.setItem(LAST_PREDICTION_KEY, JSON.stringify({ ...prediction, owner_id: userId })) } catch { /* storage unavailable */ }
+}
+
+export function clearStoredPrediction() {
+  try { localStorage.removeItem(LAST_PREDICTION_KEY) } catch { /* storage unavailable */ }
+}
+
+// Only a prediction produced by the real model (it carries `probabilities`) AND made by this same account may drive
+// the Device Panel or be used for calibration feedback (another account on this browser must not reuse it).
+export function readStoredPrediction(userId) {
   try {
-    const raw = localStorage.getItem('neurorelief_last_prediction')
+    const raw = localStorage.getItem(LAST_PREDICTION_KEY)
     if (!raw) return null
     const p = JSON.parse(raw)
-    if (p && p.probabilities != null && p.predicted_severity) return p
+    if (p && p.probabilities != null && p.predicted_severity) {
+      return userId != null && p.owner_id === userId ? p : null   // leave another account's entry in place
+    }
   } catch { /* fall through and clear */ }
-  localStorage.removeItem('neurorelief_last_prediction')
+  clearStoredPrediction()
   return null
 }
 

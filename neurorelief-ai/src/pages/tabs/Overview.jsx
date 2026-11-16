@@ -5,7 +5,8 @@ import { Icon } from '../../components/icons'
 import { useFormat } from '../../i18n/format'
 import { getCycleData, getMoodData, getMyBookings, getPredictionHistory, getPastScans } from '../../services/api'
 
-const todayKey = () => new Date().toISOString().split('T')[0]
+// Local calendar date (localToday below), so the daily trackers reset at local midnight, not UTC midnight
+const todayKey = () => localToday()
 const waterKey = () => 'neurorelief_water_' + todayKey()
 const meditationKey = () => 'neurorelief_meditation_' + todayKey()
 const WATER_GOAL = 8

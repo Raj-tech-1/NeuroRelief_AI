@@ -21,6 +21,19 @@ function headers(withAuth = true) {
   return h
 }
 
+// Parses a JSON response and throws on an HTTP error, so an error body (401, 500, ...) is never shown as real data.
+// The error carries .status and the server's message when it sent one.
+async function okJson(res) {
+  let data = null
+  try { data = await res.json() } catch { /* empty or non-JSON body */ }
+  if (!res.ok) {
+    const err = new Error(data?.error || `Request failed (${res.status})`)
+    err.status = res.status
+    throw err
+  }
+  return data
+}
+
 // ─── Auth ────────────────────────────────────────────
 export async function loginUser(email, password) {
   const res = await fetch(`${BASE_URL}/auth/login`, {
@@ -47,7 +60,7 @@ export async function registerUser(email, password) {
 // ─── Cycle Data ──────────────────────────────────────
 export async function getCycleData(userId) {
   const res = await fetch(`${BASE_URL}/cycles`, { headers: headers() })
-  const data = await res.json()
+  const data = await okJson(res)
 
   if (data.currentData) {
     return {
@@ -109,7 +122,7 @@ export async function addCycle(userId, cycleData) {
 // ─── Mood & Wellness ─────────────────────────────────
 export async function getMoodData(userId) {
   const res = await fetch(`${BASE_URL}/mood`, { headers: headers() })
-  const data = await res.json()
+  const data = await okJson(res)
 
   const todayEntry = data.todayEntry
   return {
@@ -164,7 +177,8 @@ export async function saveMoodEntry(userId, entry) {
       energy: entry.energy,
       stress: entry.stress,
       sleep_quality: entry.sleep,
-      sleep_hours: entry.sleep,
+      // The form has no sleep-hours input: 'sleep' is the 1-10 quality score, so it must not be stored as hours
+      sleep_hours: null,
       note: entry.note
     })
   })
@@ -217,7 +231,7 @@ export async function getOverviewData(userId) {
 // ─── Doctors ─────────────────────────────────────────
 export async function getDoctors() {
   const res = await fetch(`${BASE_URL}/doctors`)
-  return res.json()
+  return okJson(res)
 }
 
 // ─── Articles / Learn ────────────────────────────────
@@ -258,7 +272,7 @@ export async function submitScan(scanData) {
       notes: scanData.notes
     })
   })
-  const data = await res.json()
+  const data = await okJson(res)
   return {
     scan_id: data.scan_id,
     timestamp: new Date().toISOString(),
@@ -269,7 +283,7 @@ export async function submitScan(scanData) {
 
 export async function getPastScans(userId) {
   const res = await fetch(`${BASE_URL}/scans`, { headers: headers() })
-  return res.json()
+  return okJson(res)
 }
 
 // ─── Doctor workflow (appointment requests) ──────────
@@ -300,7 +314,7 @@ export const cancelBooking = id => doctorRequest('POST', `/bookings/${id}/cancel
 // ─── Prediction history (for the Overview "Latest Pain Prediction") ───
 export async function getPredictionHistory() {
   const res = await fetch(`${BASE_URL}/predict/history`, { headers: headers() })
-  const data = await res.json()
+  const data = await okJson(res)
   return Array.isArray(data) ? data : []
 }
 

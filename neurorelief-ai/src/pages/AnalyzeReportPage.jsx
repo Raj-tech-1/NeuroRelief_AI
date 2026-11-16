@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Spinner from '../components/Spinner'
 import { getPastScans } from '../services/api'
+import { toDate } from '../components/care/shared'   // SQLite timestamps are UTC
 
 export default function AnalyzeReportPage() {
   const navigate = useNavigate()
@@ -35,7 +36,7 @@ export default function AnalyzeReportPage() {
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-3"><span className="text-2xl">📄</span></div>
               <h2 className="text-xl font-bold text-gray-900">Health Assessment Report</h2>
-              <p className="text-sm text-gray-500">{new Date(selectedScan.created_at).toLocaleString()}</p>
+              <p className="text-sm text-gray-500">{toDate(selectedScan.created_at).toLocaleString()}</p>
             </div>
 
             <div className="space-y-4">
@@ -45,7 +46,7 @@ export default function AnalyzeReportPage() {
                   <p className="text-gray-500">Life Stage:</p>
                   <p className="font-medium">{selectedScan.life_stage}</p>
                   <p className="text-gray-500">Assessment Date:</p>
-                  <p className="font-medium">{new Date(selectedScan.created_at).toLocaleDateString()}</p>
+                  <p className="font-medium">{toDate(selectedScan.created_at).toLocaleDateString()}</p>
                 </div>
               </div>
 
@@ -128,7 +129,7 @@ export default function AnalyzeReportPage() {
                       <p className="font-semibold text-gray-900">Assessment Report</p>
                       <p className="text-sm text-gray-500">{scan.life_stage} • {scan.body_areas} • Severity: {scan.severity}/10</p>
                     </div>
-                    <p className="text-xs text-gray-400">{new Date(scan.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-400">{toDate(scan.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
               ))}

@@ -18,8 +18,10 @@ export default function ProfilePage({ onClose }) {
   useEffect(() => {
     // Load saved profile from localStorage
     const saved = localStorage.getItem('neurorelief_profile')
-    if (saved) {
-      const p = JSON.parse(saved)
+    let p = null
+    try { p = saved ? JSON.parse(saved) : null } catch { /* corrupt entry: ignore */ }
+    // Skip a profile saved by a different account on this browser (older entries have no owner_id)
+    if (p && (p.owner_id == null || p.owner_id === user?.user_id)) {
       setAge(p.age || '')
       setHeight(p.height || '')
       setWeight(p.weight || '')
@@ -39,7 +41,8 @@ export default function ProfilePage({ onClose }) {
 
   function handleSave() {
     setSaving(true)
-    const profile = { name, age, height, weight, bmi }
+    // owner_id: the AI advisor only uses age/BMI from a profile saved by the same account
+    const profile = { name, age, height, weight, bmi, owner_id: user?.user_id }
     localStorage.setItem('neurorelief_profile', JSON.stringify(profile))
 
     // Update the signed-in user's display name (this tab's session; the shared copy only if it is the same account)

@@ -5,6 +5,7 @@ import { readStoredPrediction } from '../../services/predictions'
 import { Icon } from '../../components/icons'
 import { saveTherapySession } from '../../services/api'
 import { getSessionToken } from '../../services/session'
+import { useAuth } from '../../context/AuthContext'
 
 const BASE_URL = 'http://localhost:8000/api'
 const getToken = getSessionToken
@@ -12,6 +13,7 @@ const getToken = getSessionToken
 export default function DevicePanel() {
   const { t } = useTranslation()
   const fmt = useFormat()
+  const { user } = useAuth()
   const [calibration, setCalibration] = useState(null)
   // Device state
   const [connected, setConnected] = useState(false)
@@ -45,17 +47,18 @@ export default function DevicePanel() {
 
   useEffect(() => {
     // Load last prediction from localStorage
-    const pred = readStoredPrediction()
+    // Only a prediction made by this account (see readStoredPrediction)
+    const pred = readStoredPrediction(user?.user_id)
     if (pred) setLastPrediction(pred)
 
-    // Load personal calibration status
+    // Load personal calibration status (an error response is not shown as calibration data)
     fetch(`${BASE_URL}/predict/calibration`, {
       headers: { 'Authorization': `Bearer ${getToken()}` }
     })
-      .then(r => r.json())
-      .then(setCalibration)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d) setCalibration(d) })
       .catch(() => {})
-  }, [])
+  }, [user?.user_id])
 
   // Timer logic
   useEffect(() => {
@@ -155,7 +158,8 @@ export default function DevicePanel() {
 
     // ---- personal calibration feedback ----
     // Always report against the RAW model score. Using an already-calibrated
-    // score here would make the offset compound on itself.
+    // score here would make the offset compound on itself. pred_id lets the server use the raw score it stored
+    // with that prediction; base_score is the fallback for predictions saved before pred_id existed.
     const rawScore = lastPrediction?.base_severity_score ?? lastPrediction?.severity_score
     if (rawScore != null) {
       fetch(`${BASE_URL}/predict/feedback`, {
@@ -164,10 +168,10 @@ export default function DevicePanel() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${getToken()}`
         },
-        body: JSON.stringify({ base_score: rawScore, actual_pain: painBefore })
+        body: JSON.stringify({ pred_id: lastPrediction?.pred_id ?? undefined, base_score: rawScore, actual_pain: painBefore })
       })
-        .then(r => r.json())
-        .then(d => { if (d.calibration) setCalibration({ ...d.calibration, needed: 5 }) })
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => { if (d?.calibration) setCalibration(d.calibration) })
         .catch(() => {})
     }
 

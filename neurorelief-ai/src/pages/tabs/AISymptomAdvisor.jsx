@@ -4,7 +4,8 @@ import { useFormat } from '../../i18n/format'
 import { localizeFixed } from '../../i18n/serverText'
 import EnglishOnly from '../../components/EnglishOnly'
 import VoiceAssistant from '../../components/VoiceAssistant'
-import { getPainPrediction } from '../../services/predictions'
+import { getPainPrediction, storePrediction, clearStoredPrediction } from '../../services/predictions'
+import { useAuth } from '../../context/AuthContext'
 import { getCycleData, getMoodData, getPredictionHistory, getArticles } from '../../services/api'
 import { Icon } from '../../components/icons'
 import imgWater from '../../assets/illustrations/tip-water.svg'
@@ -39,6 +40,16 @@ const symptomWeights = {
   'Cramps': 3, 'Back pain': 2, 'Headache': 2, 'Nausea': 2,
   'Fatigue': 1, 'Bloating': 1, 'Breast tenderness': 1, 'Mood swings': 1,
   'Anxiety': 2, 'Dizziness': 2, 'Insomnia': 1, 'Acne': 0, 'Food cravings': 0,
+}
+
+// Age and BMI from the Profile page, only if that profile was saved by this same account
+function readProfile(userId) {
+  try {
+    const p = JSON.parse(localStorage.getItem('neurorelief_profile') || 'null')
+    if (!p || userId == null || p.owner_id !== userId) return {}
+    const num = (v, lo, hi) => { const n = parseFloat(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : undefined }
+    return { age: num(p.age, 10, 80), bmi: num(p.bmi, 10, 60) }
+  } catch { return {} }
 }
 
 // Map phase names to model input
@@ -86,6 +97,7 @@ export default function AISymptomAdvisor({ onTabChange }) {
   const [articles, setArticles] = useState([])
   const textareaRef = useRef(null)
 
+  const { user } = useAuth()
   // Auto-filled from user's saved data
   const [userContext, setUserContext] = useState(null)
   const [loadingContext, setLoadingContext] = useState(true)
@@ -112,7 +124,8 @@ export default function AISymptomAdvisor({ onTabChange }) {
         setUserContext({
           phase: cycleData?.currentPhase || 'Unknown',
           dayOfCycle: cycleData?.dayOfCycle || null,
-          sleepHours:  pick(moodData?.today?.sleep,  rec.avgSleep,  6.5),
+          // Sleep QUALITY 1-10 (today's entry or the 7-day average). There is no sleep-hours input.
+          sleepQuality: pick(moodData?.today?.sleep, rec.avgSleep, 5),
           stressLevel: pick(moodData?.today?.stress, rec.avgStress, 5),
           energyLevel: pick(moodData?.today?.energy, rec.avgEnergy, 5),
           mood: loggedToday ? (moodData?.today?.mood || 'Okay') : 'Okay',
@@ -149,24 +162,35 @@ export default function AISymptomAdvisor({ onTabChange }) {
     setLoading(true)
 
     const totalWeight = selectedSymptoms.reduce((sum, s) => sum + (symptomWeights[s] || 1), 0)
-    const stressFromSymptoms = Math.min(10, 3 + totalWeight)
+    // Fallback stress on the model's 0-5 scale, only used if no stress value is known at all
+    const stressFromSymptoms = Math.min(5, 1 + Math.round(totalWeight / 2))
+    // The model's symptom/stress features use a 0-5 scale ("Not at all" .. "Very High"); the app logs 1-10
+    const toModelScale = v => Math.max(0, Math.min(5, Math.round(v / 2)))
+    const has = name => selectedSymptoms.includes(name)
+    const profile = readProfile(user?.user_id)
+    // Poor sleep quality (1-10, today or the 7-day average) feeds the model's "sleep issues" feature (0-5)
+    const sleepIssueFromQuality = userContext?.hasMoodData && userContext.sleepQuality != null
+      ? toModelScale(10 - userContext.sleepQuality) : 0
 
     // Use real user data for prediction instead of random/hardcoded values
     const predictionInput = {
       phase: phaseToModel[userContext?.phase] || 'Follicular',
       cycle_day: userContext?.dayOfCycle ?? 14,   // 14 only if cycle genuinely unknown
-      sleep_hours: userContext?.sleepHours || 7,
-      stress_level: userContext?.stressLevel || stressFromSymptoms,
-      fatigue: selectedSymptoms.includes('Fatigue') ? 4 : 2,
-      cramps: selectedSymptoms.includes('Cramps') ? 4 : 1,
-      headaches: selectedSymptoms.includes('Headache') ? 3 : 1,
-      bloating: selectedSymptoms.includes('Bloating') ? 3 : 1,
-      moodswing: selectedSymptoms.includes('Mood swings') ? 3 : 1,
-      sleepissue: selectedSymptoms.includes('Insomnia') ? 4 : 1,
+      // No sleep-hours input exists (the 1-10 slider is QUALITY), so the model's neutral 7 hours is sent
+      sleep_hours: 7,
+      stress_level: userContext?.stressLevel != null ? toModelScale(userContext.stressLevel) : stressFromSymptoms,
+      // A symptom that was not selected is "Not at all" (0)
+      fatigue: has('Fatigue') ? 4 : 0,
+      cramps: has('Cramps') ? 4 : 0,
+      headaches: has('Headache') ? 3 : 0,
+      bloating: has('Bloating') ? 3 : 0,
+      moodswing: has('Mood swings') ? 3 : 0,
+      sleepissue: Math.max(has('Insomnia') ? 4 : 0, sleepIssueFromQuality),
       activity_level: userContext?.energyLevel >= 6 ? 'Moderate' : 'Low',
-      mood: userContext?.mood === 'Good' ? 'Energetic' : userContext?.mood === 'Sad' ? 'sad' : 'Calm',
-      bmi: 22,
-      age: 25,
+      mood: { Good: 'Energetic', Sad: 'sad', Angry: 'Moody' }[userContext?.mood] || 'Calm',
+      // From this account's saved profile when set; otherwise the model's defaults
+      bmi: profile.bmi ?? 22,
+      age: profile.age ?? 25,
     }
 
     let prediction
@@ -174,7 +198,7 @@ export default function AISymptomAdvisor({ onTabChange }) {
       prediction = await getPainPrediction(predictionInput)
     } catch (err) {
       // No fabricated result: drop any stale prediction so the Device Panel cannot apply it
-      localStorage.removeItem('neurorelief_last_prediction')
+      clearStoredPrediction()
       setResult(null)
       setError({ key: `advisor.err.${err.code || 'generic'}` })
       setLoading(false)
@@ -184,7 +208,7 @@ export default function AISymptomAdvisor({ onTabChange }) {
 
     setResult({ symptoms: selectedSymptoms, description, prediction, advice, context: userContext })
     // Save prediction for Device Panel auto-fill
-    localStorage.setItem('neurorelief_last_prediction', JSON.stringify(prediction))
+    storePrediction(prediction, user?.user_id)
     setLoading(false)
     getPredictionHistory().then(setHistory).catch(() => {})
   }
@@ -277,7 +301,7 @@ export default function AISymptomAdvisor({ onTabChange }) {
                       {result.context.usingAverage ? `${t('advisor.usingAverage', { days: fmt.number(result.context.daysLogged) })} ` : ''}
                       {result.context.hasCycleData ? t('advisor.phaseDay', { phase: tPhase(result.context.phase), day: fmt.number(result.context.dayOfCycle) }) : ''}
                       {result.context.hasCycleData && result.context.hasMoodData ? ' • ' : ''}
-                      {result.context.hasMoodData ? t('advisor.sleepStress', { sleep: result.context.sleepHours, stress: result.context.stressLevel }) : ''}
+                      {result.context.hasMoodData ? t('advisor.sleepStress', { sleep: result.context.sleepQuality, stress: result.context.stressLevel }) : ''}
                     </p>
                   </div>
                 </div>
