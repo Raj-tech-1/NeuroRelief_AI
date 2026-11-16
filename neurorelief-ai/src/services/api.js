@@ -502,4 +502,5 @@ export const getDoctorNotes = (query = {}) => careRequest('GET', `/doctor/notes$
 export const updateNote = (id, body) => careRequest('PATCH', `/doctor/notes/${id}`, body)
 export const getDoctorFollowUps = () => careRequest('GET', '/doctor/follow-ups')
 export const getDoctorPatients = () => careRequest('GET', '/doctor/patients')
+export const getPatientTimeline = patientId => careRequest('GET', `/doctor/patients/${patientId}/timeline`)
 export const getPatientRecords = (patientId, category) => careRequest('GET', `/doctor/patients/${patientId}/records?category=${encodeURIComponent(category)}`)

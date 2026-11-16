@@ -520,9 +520,142 @@ export function doctorPatients(ctx, doctorId) {
       patientId: r.patient_id, name: r.patient_name, appointments: Number(r.appts || 0), firstContactAt: r.first_at, lastConfirmedDate: r.last_confirmed ?? null,
       nextAppointment: next || null,
       lastAppointment: last || null,   // status 'accepted' here means the visit date passed but it was not marked complete
+      attention: attentionFor(ctx, doctorId, r.patient_id, today, next),
       access: { active: mine.length > 0, categories: [...new Set(mine.flatMap(g => String(g.categories).split(',')))].sort(), expiresAt: mine.map(g => g.expires_at).sort().pop() ?? null },
     }
   })
+}
+
+// Grants from this patient to this doctor that are usable right now (active, unexpired, appointment within grace)
+function usableGrants(ctx, doctorId, patientId) {
+  return ctx.db.all(
+    `SELECT g.*, a.status AS appt_status, a.completed_at FROM record_access_grants g JOIN appointments a ON a.appointment_id = g.appointment_id
+     WHERE g.doctor_user_id = ? AND g.patient_id = ? AND g.status = 'active' AND a.doctor_user_id = g.doctor_user_id AND a.patient_id = g.patient_id`,
+    [doctorId, patientId]).filter(g => grantActive(ctx, g) && withinGrace(ctx, { status: g.appt_status, completed_at: g.completed_at }))
+}
+const addDays = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10)
+
+// "Needs attention" (a work-list order, NOT clinical triage). Every point comes with a reason the doctor can see.
+//   From appointments/messages (already visible to the doctor): pending request, past visit not marked complete,
+//   appointment within 2 days, unread patient messages.
+//   From shared records, ONLY for categories covered by an active grant and only within its date range: a High AI
+//   prediction in the last 7 days, severe or rising pain, a period more than 7 days late.
+// Reading shared records for this is audited (record_viewed, detail 'attention') at most once per doctor+patient per day.
+function attentionFor(ctx, doctorId, patientId, today, next) {
+  const reasons = []
+  const add = (code, points, extra = {}) => reasons.push({ code, points, ...extra })
+  const P = [doctorId, patientId]
+
+  const pending = Number(ctx.db.get("SELECT COUNT(*) AS n FROM appointments WHERE doctor_user_id = ? AND patient_id = ? AND status = 'pending' AND requested_date >= ?", [...P, today]).n)
+  if (pending) add('pending_request', 3, { count: pending })
+  const overdue = ctx.db.get("SELECT COUNT(*) AS n, MAX(requested_date) AS d FROM appointments WHERE doctor_user_id = ? AND patient_id = ? AND status = 'accepted' AND requested_date < ?", [...P, today])
+  if (Number(overdue.n)) add('visit_not_completed', 2, { date: overdue.d })
+  if (next && next.status === 'accepted' && next.date <= addDays(today, 2)) add('appointment_soon', 2, { date: next.date, time: next.time })
+  if (tableExists(ctx, 'appointment_messages')) {
+    const unread = Number(ctx.db.get(
+      `SELECT COUNT(*) AS n FROM appointment_messages m JOIN appointments a ON a.appointment_id = m.appointment_id
+       WHERE a.doctor_user_id = ? AND a.patient_id = ? AND m.sender_role = 'user' AND m.read_at IS NULL`, P).n)
+    if (unread) add('unread_messages', 2, { count: unread })
+  }
+
+  const grants = usableGrants(ctx, doctorId, patientId)
+  const covering = cat => grants.filter(g => String(g.categories).split(',').includes(cat))
+  // Rows of one shared category between `from` and today, clipped to the grant ranges
+  const shared = (cat, from) => {
+    const gs = covering(cat)
+    if (!gs.length) return null
+    return readCategory(ctx, patientId, cat, from, today)
+      .filter(r => { const d = String(r.date || r.start_date || r.started_at || '').slice(0, 10); return gs.some(g => d >= g.range_from && d <= g.range_to) })
+  }
+  let usedRecords = false
+  const preds = shared('predictions', addDays(today, -7))
+  if (preds) {
+    usedRecords = true
+    const high = preds.find(p => p.predicted_severity === 'High')
+    if (high) add('high_prediction', 3, { date: high.date })
+  }
+  const pain = shared('pain', addDays(today, -14))
+  if (pain) {
+    usedRecords = true
+    const cut = addDays(today, -7)
+    const recent = pain.filter(p => p.date > cut), before = pain.filter(p => p.date <= cut)
+    const avg = a => a.reduce((s, p) => s + p.pain, 0) / a.length
+    const maxRecent = recent.length ? Math.max(...recent.map(p => p.pain)) : null
+    if (maxRecent != null && maxRecent >= 8) add('severe_pain', 3, { pain: maxRecent })
+    if (recent.length && before.length && avg(recent) - avg(before) >= 2) add('pain_rising', 2, { from: Math.round(avg(before) * 10) / 10, to: Math.round(avg(recent) * 10) / 10 })
+  }
+  const cycles = shared('cycles', addDays(today, -120))
+  if (cycles) {
+    usedRecords = true
+    const latest = cycles[0]
+    if (latest) {
+      const len = latest.cycle_length || 28
+      const day = Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(latest.start_date + 'T00:00:00Z')) / 86400000) + 1
+      const late = day - len - 1
+      if (late >= 7) add('period_late', 1, { days: late })
+    }
+  }
+  if (usedRecords) {
+    const seen = ctx.db.get(
+      "SELECT 1 AS x FROM clinical_audit_events WHERE event_type = 'record_viewed' AND actor_user_id = ? AND patient_id = ? AND detail_code = 'attention' AND created_at >= datetime('now', '-1 day') LIMIT 1",
+      [doctorId, patientId])
+    if (!seen) auditOrFail(ctx, { type: 'record_viewed', actor: { id: doctorId, role: 'doctor' }, patientId, grantId: grants[0].grant_id, appointmentId: grants[0].appointment_id, detail: 'attention' })
+  }
+  reasons.sort((a, b) => b.points - a.points)
+  return { score: reasons.reduce((s, r) => s + r.points, 0), reasons, usesSharedRecords: usedRecords }
+}
+
+// Patient timeline for one doctor: appointment history, this doctor's notes (type only), message activity (counts
+// only), reports shared with this doctor, this doctor's therapy plans, and shared records (only categories and dates
+// covered by an active grant). Each record category included is audited as a record view.
+export function doctorPatientTimeline(ctx, doctorId, patientId) {
+  if (!isId(patientId)) throw notFound()
+  const rel = ctx.db.get('SELECT 1 AS x FROM appointments WHERE doctor_user_id = ? AND patient_id = ? LIMIT 1', [doctorId, patientId])
+  if (!rel) throw notFound()
+  const items = []
+  const P = [doctorId, patientId]
+  for (const e of ctx.db.all(
+    `SELECT e.event_type, e.actor_role, e.to_date, e.to_time, e.created_at FROM appointment_events e JOIN appointments a ON a.appointment_id = e.appointment_id
+     WHERE a.doctor_user_id = ? AND a.patient_id = ? AND e.event_type <> 'message_sent'`, P)) {
+    items.push({ type: 'appointment', at: e.created_at, atKind: 'ts', event: e.event_type, by: e.actor_role, date: e.to_date, time: e.to_time })
+  }
+  for (const n of ctx.db.all('SELECT kind, visibility, created_at FROM consultation_notes WHERE doctor_user_id = ? AND patient_id = ?', P)) {
+    items.push({ type: 'note', at: n.created_at, atKind: 'ts', kind: n.kind, visibility: n.visibility })
+  }
+  for (const m of ctx.db.all(
+    `SELECT substr(m.created_at, 1, 10) AS day, MAX(m.created_at) AS last, SUM(m.sender_role = 'user') AS from_patient, SUM(m.sender_role = 'doctor') AS from_doctor
+     FROM appointment_messages m JOIN appointments a ON a.appointment_id = m.appointment_id WHERE a.doctor_user_id = ? AND a.patient_id = ? GROUP BY day`, P)) {
+    items.push({ type: 'messages', at: m.last, atKind: 'ts', fromPatient: Number(m.from_patient), fromDoctor: Number(m.from_doctor) })
+  }
+  if (tableExists(ctx, 'report_shares')) {
+    for (const s of ctx.db.all('SELECT status, consent_report_title AS title, submitted_at FROM report_shares WHERE doctor_user_id = ? AND patient_id = ?', P)) {
+      items.push({ type: 'report', at: s.submitted_at, atKind: 'ts', status: s.status, title: s.title })
+    }
+  }
+  if (tableExists(ctx, 'therapy_plans')) {
+    for (const p of ctx.db.all('SELECT status, heat_min_c, heat_max_c, heat_max_minutes, tens_freq_min, tens_freq_max, created_at FROM therapy_plans WHERE doctor_user_id = ? AND patient_id = ?', P)) {
+      items.push({ type: 'therapy_plan', at: p.created_at, atKind: 'ts', status: p.status, heat: `${p.heat_min_c}-${p.heat_max_c} °C, ${p.heat_max_minutes} min`, tens: `${p.tens_freq_min}-${p.tens_freq_max} Hz` })
+    }
+  }
+
+  const grants = usableGrants(ctx, doctorId, patientId)
+  const cats = [...new Set(grants.flatMap(g => String(g.categories).split(',')))].filter(c => c !== 'profile' && RECORD_CATEGORIES.includes(c)).sort()
+  for (const cat of cats) {
+    const gs = grants.filter(g => String(g.categories).split(',').includes(cat))
+    const from = gs.map(g => g.range_from).sort()[0], to = gs.map(g => g.range_to).sort().pop()
+    const rows = readCategory(ctx, patientId, cat, from, to)
+      .filter(r => { const d = String(r.date || r.start_date || r.started_at || '').slice(0, 10); return gs.some(g => d >= g.range_from && d <= g.range_to) })
+    for (const r of rows.slice(0, 100)) {
+      const at = r.started_at || r.date || r.start_date
+      items.push({ type: 'record', category: cat, at, atKind: r.started_at ? 'iso' : 'date', data: r })
+    }
+    auditOrFail(ctx, { type: 'record_viewed', actor: { id: doctorId, role: 'doctor' }, patientId, grantId: gs[0].grant_id, appointmentId: gs[0].appointment_id, detail: `timeline.${cat}` })
+  }
+
+  // Sort newest first on a comparable key: dates sort as local midday, timestamps as UTC
+  const key = i => i.atKind === 'date' ? `${i.at}T12:00:00Z` : i.atKind === 'ts' ? String(i.at).replace(' ', 'T') + 'Z' : String(i.at)
+  items.sort((a, b) => key(b).localeCompare(key(a)))
+  return { patientId, items: items.slice(0, 300), sharedCategories: cats, profileShared: grants.some(g => String(g.categories).split(',').includes('profile')) }
 }
 
 const inRange = (col) => `${col} >= ? AND ${col} <= ?`

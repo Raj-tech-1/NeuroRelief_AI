@@ -10,6 +10,7 @@ import {
 import { NoteCard } from './AppointmentDrawer'
 import { initials } from './helpers'
 import TherapyPlanCard from './TherapyPlanCard'
+import PatientTimeline from './PatientTimeline'
 
 // Doctor Portal views for the synchronised features. Every list comes straight from the backend; nothing is invented.
 
@@ -239,20 +240,42 @@ export function AppointmentsView({ requests, onOpenAppointment }) {
 export function PatientsView({ onOpenInsights, onOpenNotes }) {
   const { data, error, loading, reload, updatedAt } = usePolled(() => getDoctorPatients(), [])
   const [q, setQ] = useState('')
+  const [sort, setSort] = useState('attention')   // 'attention' | 'name'
+  const [timeline, setTimeline] = useState(null)  // { id, name }
+  const score = p => p.attention?.score || 0
   const list = (data || []).filter(p => p.name.toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => (sort === 'attention' ? score(b) - score(a) : 0) || a.name.localeCompare(b.name))
   return (
     <Card right={<UpdatedStamp at={updatedAt} onRefresh={reload} />} title={`Patients (${data?.length ?? 0})`}>
-      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search patients by name" aria-label="Search patients"
-        className="w-full sm:w-80 mb-3 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200" />
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search patients by name" aria-label="Search patients"
+          className="w-full sm:w-80 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200" />
+        <div role="tablist" aria-label="Sort patients" className="inline-flex rounded-xl border border-slate-200 p-1 bg-slate-50">
+          {[['attention', 'Needs attention'], ['name', 'Name']].map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={sort === k} onClick={() => setSort(k)}
+              className={`px-3 h-8 rounded-lg text-xs font-semibold ${sort === k ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600'}`}>{label}</button>
+          ))}
+        </div>
+      </div>
+      {sort === 'attention' && <p className="text-xs text-slate-500 mb-3">{ATTENTION_NOTE}</p>}
       <ErrorNote error={error} onRetry={reload} />
       {loading && !data ? <Loading /> : list.length === 0 ? <EmptyState icon="users" title="No patients yet" hint="Patients appear here once they request an appointment with you." /> : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-slate-500 bg-slate-50"><th className="py-2 px-3 font-medium">Patient</th><th className="px-3 font-medium">Appointments</th><th className="px-3 font-medium">Next appointment</th><th className="px-3 font-medium">Record access</th><th className="px-3" /></tr></thead>
+            <thead><tr className="text-left text-slate-500 bg-slate-50"><th className="py-2 px-3 font-medium">Patient</th><th className="px-3 font-medium">Needs attention</th><th className="px-3 font-medium">Appointments</th><th className="px-3 font-medium">Next appointment</th><th className="px-3 font-medium">Record access</th><th className="px-3" /></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {list.map(p => (
                 <tr key={p.patientId}>
                   <td className="py-3 px-3"><span className="flex items-center gap-2"><span className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 font-bold text-xs flex items-center justify-center">{initials(p.name)}</span><span className={`font-semibold ${navy}`}>{p.name}</span></span></td>
+                  <td className="px-3 py-2 align-top">
+                    {p.attention?.reasons?.length ? (
+                      <ul className="flex flex-wrap gap-1 max-w-xs" aria-label={`Attention reasons for ${p.name}`}>
+                        {p.attention.reasons.map(r => (
+                          <li key={r.code} className={`text-[11px] px-2 py-0.5 rounded-full ${r.points >= 3 ? 'bg-red-50 text-red-700' : r.points >= 2 ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{attentionText(r)}</li>
+                        ))}
+                      </ul>
+                    ) : <span className="text-xs text-slate-400">Nothing flagged</span>}
+                  </td>
                   <td className="px-3 text-slate-700">{p.appointments}</td>
                   <td className="px-3 text-slate-700">{p.nextAppointment ? `${fmtDay(p.nextAppointment.date)} · ${p.nextAppointment.time}` : (
                     <span className="text-slate-500">None upcoming{p.lastAppointment && (
@@ -263,6 +286,7 @@ export function PatientsView({ onOpenInsights, onOpenNotes }) {
                     ? <span className="text-xs text-emerald-700 font-semibold">{p.access.categories.length} categor{p.access.categories.length === 1 ? 'y' : 'ies'} shared</span>
                     : <span className="text-xs text-slate-500">Not shared</span>}</td>
                   <td className="px-3 text-right whitespace-nowrap">
+                    <button onClick={() => setTimeline(timeline?.id === p.patientId ? null : { id: p.patientId, name: p.name })} aria-expanded={timeline?.id === p.patientId} className={`${linkBtn} mr-3`}>Timeline</button>
                     <button onClick={() => onOpenInsights(p.patientId)} className={`${linkBtn} mr-3`}>Insights</button>
                     <button onClick={() => onOpenNotes(p.patientId)} className={linkBtn}>Notes</button>
                   </td>
@@ -273,8 +297,26 @@ export function PatientsView({ onOpenInsights, onOpenNotes }) {
         </div>
       )}
       <p className="text-xs text-slate-400 mt-3">Only names are shown here. Health records are visible only where the patient has explicitly shared them with you.</p>
+      {timeline && <PatientTimeline key={timeline.id} patientId={timeline.id} name={timeline.name} onClose={() => setTimeline(null)} />}
     </Card>
   )
+}
+
+// "Needs attention" is a work-list order, not clinical triage: each point has a visible reason.
+const ATTENTION_NOTE = 'Ordered by what may need your attention (pending requests, visits not marked complete, upcoming appointments, unread messages; and, only where the patient shares those records, recent High predictions, severe or rising pain, late periods). This is a work-list order, not a clinical risk score.'
+function attentionText(r) {
+  const day = d => (d ? new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '')
+  switch (r.code) {
+    case 'pending_request': return r.count > 1 ? `${r.count} pending requests` : 'Pending request'
+    case 'visit_not_completed': return `Visit ${day(r.date)} not marked complete`
+    case 'appointment_soon': return `Appointment ${day(r.date)}${r.time ? ` ${r.time}` : ''}`
+    case 'unread_messages': return r.count > 1 ? `${r.count} unread messages` : 'Unread message'
+    case 'high_prediction': return `High AI prediction ${day(r.date)}`
+    case 'severe_pain': return `Pain ${r.pain}/10 this week`
+    case 'pain_rising': return `Pain rising (${r.from} → ${r.to})`
+    case 'period_late': return `Period ${r.days} days late`
+    default: return r.code
+  }
 }
 
 // ---------------------------------------------------------------- Consultation notes

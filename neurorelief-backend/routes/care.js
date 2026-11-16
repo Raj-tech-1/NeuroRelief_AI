@@ -78,6 +78,7 @@ export function createCareRouter({ authenticate, ctx, reportSummary = null, limi
   router.patch('/doctor/notes/:id', doctor, writes, handle(req => svc.doctorUpdateNote(ctx, req.userId, id(req, 'id'), req.body)))
   router.get('/doctor/follow-ups', doctor, handle(req => svc.doctorFollowUps(ctx, req.userId)))
   router.get('/doctor/patients', doctor, handle(req => svc.doctorPatients(ctx, req.userId)))
+  router.get('/doctor/patients/:id/timeline', doctor, handle(req => svc.doctorPatientTimeline(ctx, req.userId, id(req, 'id'))))
   router.get('/doctor/patients/:id/records', doctor, handle(req => svc.doctorPatientRecords(ctx, req.userId, id(req, 'id'), req.query.category)))
 
   return router
