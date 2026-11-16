@@ -3,13 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { useFormat } from '../../i18n/format'
 import { readStoredPrediction } from '../../services/predictions'
 import { Icon } from '../../components/icons'
+import { saveTherapySession } from '../../services/api'
+import { getSessionToken } from '../../services/session'
 
 const BASE_URL = 'http://localhost:8000/api'
-function getToken() {
-  const u = localStorage.getItem('neurorelief_user')
-  if (!u) return null
-  try { return JSON.parse(u).token } catch { return null }
-}
+const getToken = getSessionToken
 
 export default function DevicePanel() {
   const { t } = useTranslation()
@@ -42,6 +40,8 @@ export default function DevicePanel() {
 
   // Last AI prediction (for auto-fill)
   const [lastPrediction, setLastPrediction] = useState(null)
+  // Server copy of finished sessions (so an authorised doctor can see them); local history above is unchanged
+  const [serverSync, setServerSync] = useState(null)   // null | 'saving' | 'saved' | 'unavailable'
 
   useEffect(() => {
     // Load last prediction from localStorage
@@ -141,6 +141,17 @@ export default function DevicePanel() {
     const updated = [session, ...history].slice(0, 20)
     setHistory(updated)
     localStorage.setItem('neurorelief_therapy_history', JSON.stringify(updated))
+
+    // ---- also save to the patient's record on the server, as two SEPARATE session types ----
+    // Heating: from this panel. TENS: the commercial device is not connected, so it is stored as a manual record
+    // of the settings entered here. clientRef makes a retry idempotent.
+    const startedAt = new Date(session.ts - sessionSeconds * 1000).toISOString()
+    const common = { startedAt, durationSeconds: sessionSeconds, painBefore, painAfter: afterPain }
+    setServerSync('saving')
+    Promise.all([
+      saveTherapySession({ ...common, kind: 'heat', heatTempC: heatTemp, clientRef: `h-${session.ts}` }),
+      saveTherapySession({ ...common, kind: 'tens', tensIntensity, tensFrequency, clientRef: `t-${session.ts}` }),
+    ]).then(() => setServerSync('saved')).catch(() => setServerSync('unavailable'))
 
     // ---- personal calibration feedback ----
     // Always report against the RAW model score. Using an already-calibrated
@@ -360,6 +371,13 @@ export default function DevicePanel() {
                 className="text-xs text-red-500 hover:text-red-700 font-medium">{t('device.clearHistory')}</button>
             )}
           </div>
+          {serverSync && (
+            <p className="text-[11px] text-gray-500 mb-1" role="status">
+              {serverSync === 'saving' ? 'Saving last session to your record…'
+                : serverSync === 'saved' ? 'Last session saved to your record (heating and TENS stored separately; TENS is a manual record because the commercial TENS device is not connected).'
+                : 'Last session kept on this device only (record sync is not available yet).'}
+            </p>
+          )}
 
           {history.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center py-6">

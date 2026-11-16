@@ -5,6 +5,9 @@ import ServerMessage from '../../components/ServerMessage'
 import { getDoctors, getMyBookings, cancelBooking, requestAppointment, getArticles } from '../../services/api'
 import { Icon } from '../../components/icons'
 import { doctorPhoto, doctorSlug } from '../../assets/doctors'
+import PatientAppointmentModal from '../../components/care/PatientAppointmentModal'
+import { openDoctorChat } from '../../components/care/PatientChatWidget'
+import { useCareStatus } from '../../components/care/shared'
 import heroImg from '../../assets/illustrations/doctor-hero.svg'
 import imgNutrition from '../../assets/illustrations/tip-nutrition.svg'
 import imgMovement from '../../assets/illustrations/tip-movement.svg'
@@ -42,7 +45,10 @@ const statusStyle = {
   accepted: 'bg-green-100 text-green-800',
   declined: 'bg-red-100 text-red-700',
   cancelled: 'bg-gray-100 text-gray-600',
+  cancelled_by_doctor: 'bg-gray-100 text-gray-600',
+  completed: 'bg-sky-100 text-sky-800',
 }
+const NEW_STATUS_LABELS = { completed: 'Completed', cancelled_by_doctor: 'Cancelled by doctor' }
 
 const card = 'bg-white/90 rounded-2xl border border-brand-100/70 shadow-sm shadow-brand-100/50'
 const selectCls = 'w-full h-[22px] bg-transparent text-[13px] font-medium text-gray-900 focus:outline-none cursor-pointer'
@@ -102,7 +108,7 @@ export default function DoctorConnect({ onTabChange }) {
   const fmt = useFormat()
   const fmtDate = iso => fmt.isoDate(iso)                       // display only; stored/sent dates stay YYYY-MM-DD
   const tSpec = sp => t(`specialty.${sp}`, { defaultValue: sp })   // display only; the filter value stays the stored specialty
-  const tStatus = st => t(`apptStatus.${st}`, { defaultValue: st })
+  const tStatus = st => t(`apptStatus.${st}`, { defaultValue: NEW_STATUS_LABELS[st] || st })
   const fmtExp = e => { const m = /^(\d+)(\+?) years?$/.exec(e || ''); return m ? t('doctor.experience', { n: fmt.number(m[1]), plus: m[2] }) : e }
   // data
   const [doctors, setDoctors] = useState([])
@@ -133,6 +139,9 @@ export default function DoctorConnect({ onTabChange }) {
   const [cancelError, setCancelError] = useState('')
 
   const searchRef = useRef(null)
+  // appointment details (reschedule, doctor's notes, messages, record sharing): needs the synchronisation update
+  const care = useCareStatus()
+  const [openApptId, setOpenApptId] = useState(null)
 
   const loadDoctors = useCallback(() => {
     setLoadingDoctors(true)
@@ -378,7 +387,17 @@ export default function DoctorConnect({ onTabChange }) {
                     <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusStyle[b.status] || statusStyle.pending}`}>{tStatus(b.status)}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 min-h-[20px]">
-                    <span className="text-[10px] text-gray-500">{b.status === 'pending' ? t('doctor.awaiting') : tSpec(b.specialty)}</span>
+                    <span className="text-[10px] text-gray-500 flex items-center gap-1.5 flex-wrap">
+                      {b.proposal?.by_doctor
+                        ? <span className="font-semibold text-amber-700">New time proposed</span>
+                        : b.status === 'pending' ? t('doctor.awaiting') : tSpec(b.specialty)}
+                      {care.enabled && (
+                        <button onClick={() => setOpenApptId(b.appointment_id)} className="text-[11px] font-semibold text-brand-700 underline">Details</button>
+                      )}
+                      {care.enabled && (b.status === 'pending' || b.status === 'accepted') && (
+                        <button onClick={() => openDoctorChat(b.appointment_id)} className="text-[11px] font-semibold text-brand-700 underline">Chat</button>
+                      )}
+                    </span>
                     {(b.status === 'pending' || b.status === 'accepted') && (
                       <span className="flex items-center gap-2 shrink-0">
                         {confirmCancelId === b.appointment_id ? (
@@ -503,6 +522,11 @@ export default function DoctorConnect({ onTabChange }) {
             )}
           </div>
         </div>
+      )}
+      {openApptId && (
+        <PatientAppointmentModal appointmentId={openApptId}
+          doctorDays={doctors.find(d => d.id === bookings.find(b => b.appointment_id === openApptId)?.doctor_id)?.days || []}
+          onClose={() => setOpenApptId(null)} onChanged={loadBookings} />
       )}
     </div>
   )

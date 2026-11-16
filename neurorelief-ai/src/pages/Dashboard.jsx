@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
-import { getMyBookings } from '../services/api'
+import { getMyBookings, getCareActivity } from '../services/api'
+import { useCareStatus, eventText, ago } from '../components/care/shared'
+import PatientChatWidget from '../components/care/PatientChatWidget'
 import { Icon, LeafLogo } from '../components/icons'
 import LanguageSelector from '../components/LanguageSelector'
 import { useFormat } from '../i18n/format'
@@ -17,6 +19,9 @@ import DevicePanel from './tabs/DevicePanel'
 import Learn from './tabs/Learn'
 import ProfilePage from './ProfilePage'
 
+// The 3D explorer (three.js) is loaded only when its tab is opened
+const Device3DExplorer = lazy(() => import('./tabs/Device3DExplorer'))
+
 const tabComponents = {
   overview: Overview,
   cycle: CycleTracking,
@@ -25,6 +30,7 @@ const tabComponents = {
   doctor: DoctorConnect,
   audit: ReportAudit,
   device: DevicePanel,
+  device3d: Device3DExplorer,
   learn: Learn,
 }
 
@@ -37,10 +43,13 @@ const NAV = [
   { id: 'doctor', icon: 'stethoscope' },
   { id: 'audit', icon: 'doc' },
   { id: 'device', icon: 'device' },
+  { id: 'device3d', icon: 'cube' },
   { id: 'learn', icon: 'book' },
 ]
 
 const SEEN_KEY = 'neurorelief_seen_appt_updates'
+const CARE_SEEN_KEY = 'neurorelief_seen_care_cursor'
+const CARE_SEEN_TS_KEY = 'neurorelief_seen_care_ts'
 
 function readSeen() {
   try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || {} } catch { return {} }
@@ -81,12 +90,29 @@ export default function Dashboard() {
     }
   }, [loadBookings])
 
-  const updates = bookings.filter(b => b.status === 'accepted' || b.status === 'declined').slice(0, 6)
-  const unreadCount = updates.filter(b => seen[b.appointment_id] !== b.status).length
+  const care = useCareStatus()
+  const [activity, setActivity] = useState({ items: [], cursor: 0 })
+  const [careSeen, setCareSeen] = useState(() => { try { return Number(localStorage.getItem(CARE_SEEN_KEY)) || 0 } catch { return 0 } })
+  useEffect(() => {
+    if (!care.enabled) return
+    const load = () => getCareActivity().then(a => setActivity({ items: a.items || [], cursor: a.cursor || 0 })).catch(() => {})
+    load()
+    const timer = setInterval(load, 30000)
+    window.addEventListener('focus', load)
+    return () => { clearInterval(timer); window.removeEventListener('focus', load) }
+  }, [care.enabled])
+
+  // With the synchronisation update the feed below covers accept/decline too, so the older list is used only without it
+  const updates = care.enabled ? [] : bookings.filter(b => b.status === 'accepted' || b.status === 'declined').slice(0, 6)
+  const careItems = activity.items.slice(0, 8)
+  const careUnread = careItems.filter(a => (a.source === 'appointment' ? a.eventId > careSeen : String(a.createdAt) > (localStorage.getItem(CARE_SEEN_TS_KEY) || ''))).length
+  const unreadCount = updates.filter(b => seen[b.appointment_id] !== b.status).length + careUnread
 
   function markUpdatesSeen() {
     const next = { ...seen }
     updates.forEach(b => { next[b.appointment_id] = b.status })
+    setCareSeen(activity.cursor)
+    try { localStorage.setItem(CARE_SEEN_KEY, String(activity.cursor)); localStorage.setItem(CARE_SEEN_TS_KEY, String(careItems[0]?.createdAt || '')) } catch { /* private mode */ }
     setSeen(next)
     try { localStorage.setItem(SEEN_KEY, JSON.stringify(next)) } catch {}
   }
@@ -195,7 +221,7 @@ export default function Dashboard() {
                       <p className="font-semibold text-gray-900 text-sm">{t('header.appointmentUpdates')}</p>
                       {unreadCount > 0 && <button onClick={markUpdatesSeen} className="text-xs text-brand-600 hover:underline">{t('header.markRead')}</button>}
                     </div>
-                    {updates.length === 0
+                    {updates.length + careItems.length === 0
                       ? <p className="text-sm text-gray-500 px-1 py-4 text-center">{t('header.noUpdates')}</p>
                       : <ul className="space-y-1 max-h-72 overflow-y-auto">
                           {updates.map(b => (
@@ -207,6 +233,15 @@ export default function Dashboard() {
                                   {seen[b.appointment_id] !== b.status && <span className="ml-2 inline-block w-2 h-2 rounded-full bg-brand-500 align-middle" />}
                                 </p>
                                 <p className="text-xs text-gray-500">{t('header.dateAtTime', { date: fmt.date(b.date + 'T12:00:00'), time: b.time })}</p>
+                              </button>
+                            </li>
+                          ))}
+                          {careItems.map(a => (
+                            <li key={a.eventId}>
+                              <button onClick={() => { markUpdatesSeen(); goTab(a.source === 'report' ? 'audit' : 'doctor') }}
+                                className="w-full text-left px-3 py-2 rounded-xl hover:bg-brand-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+                                <p className="text-sm font-medium text-gray-900">{eventText(a, 'user')}</p>
+                                <p className="text-xs text-gray-500">{ago(a.createdAt)}</p>
                               </button>
                             </li>
                           ))}
@@ -247,9 +282,12 @@ export default function Dashboard() {
               <ProfilePage onClose={() => setShowProfile(false)} />
             </div>
           )}
-          <ActiveComponent onTabChange={goTab} />
+          <Suspense fallback={<p className="py-10 text-center text-brand-700">{t('common.loading')}</p>}>
+            <ActiveComponent onTabChange={goTab} />
+          </Suspense>
         </main>
       </div>
+      <PatientChatWidget />
     </div>
   )
 }

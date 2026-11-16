@@ -1,3 +1,4 @@
+import SymptomLogger from '../../components/care/SymptomLogger'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useFormat } from '../../i18n/format'
@@ -455,6 +456,7 @@ export default function MoodWellness({ onTabChange }) {
           </ul>
         </section>
       )}
+      <SymptomLogger />
     </div>
   )
 }

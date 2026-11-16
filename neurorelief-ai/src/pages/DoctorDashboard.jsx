@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useFormat } from '../i18n/format'
@@ -7,31 +7,43 @@ import LanguageSelector from '../components/LanguageSelector'
 import ServerMessage from '../components/ServerMessage'
 import EnglishOnly from '../components/EnglishOnly'
 import { Icon } from '../components/icons'
-import RequestRow from '../components/doctor/RequestRow'
 import RequestQueue from '../components/doctor/RequestQueue'
 import DoctorCalendar from '../components/doctor/DoctorCalendar'
 import ReportVerification from '../components/doctor/ReportVerification'
-import { todayLocal, byWhen, isStillAhead, initials, isAccessDenied } from '../components/doctor/helpers'
+import AppointmentDrawer from '../components/doctor/AppointmentDrawer'
+import {
+  DashboardHome, AppointmentsView, PatientsView, NotesView, MessagesView, FollowUpsView, InsightsView, SettingsView, CareUnavailable,
+} from '../components/doctor/CareViews'
+import { useCareStatus, eventText, eventIcon, ago } from '../components/care/shared'
+import { initials, isAccessDenied } from '../components/doctor/helpers'
 import { useAuth } from '../context/AuthContext'
 import {
   getDoctorProfile, getDoctorRequests, updateRequestStatus, markRequestSeen, markAllRequestsSeen,
-  getReportFeatureStatus, getDoctorReportSummary
+  getReportFeatureStatus, getDoctorReportSummary, getDoctorDashboard, getCareActivity,
 } from '../services/api'
+
+// The 3D explorer (three.js) loads only when it is opened. Doctors get the educational explorer, never Device Control.
+const Device3DExplorer = lazy(() => import('./tabs/Device3DExplorer'))
 
 const POLL_MS = 30000
 
-// ids drive the views; labels come from dd.<key>
-const navItems = [
-  { id: 'dashboard', key: 'navDashboard', icon: 'home' },
-  { id: 'requests', key: 'navRequests', icon: 'list' },
-  { id: 'calendar', key: 'navCalendar', icon: 'calendar' },
-  { id: 'appointments', key: 'navAppointments', icon: 'clock' },
-  { id: 'reports', key: 'navReportVerify', icon: 'doc' },
+// Sidebar. Items marked care: true need the synchronisation update on the server.
+const NAV = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'home' },
+  { id: 'patients', label: 'Patients', icon: 'users', care: true },
+  { id: 'requests', label: 'Appointment Requests', icon: 'list' },
+  { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+  { id: 'appointments', label: 'Appointments', icon: 'clock' },
+  { id: 'notes', label: 'Consultation Notes', icon: 'doc', care: true },
+  { id: 'reports', label: 'Report Verification', icon: 'shield' },
+  { id: 'messages', label: 'Patient Messages', icon: 'message', care: true },
+  { id: 'followups', label: 'Follow-up Centre', icon: 'bell', care: true },
 ]
-// Planned features: shown disabled and marked "Soon" so nothing looks available that is not.
-const plannedItems = [
-  { key: 'navPatients', icon: 'users' },
+const TOOLS = [
+  { id: 'insights', label: 'Patient Insights', icon: 'chart', care: true },
+  { id: 'explorer', label: 'Device 3D Explorer', icon: 'cube' },
 ]
+const ALL = [...NAV, ...TOOLS, { id: 'settings', label: 'Settings', icon: 'settings' }]
 
 function WithServerMessage({ k, raw }) {
   const { t } = useTranslation()
@@ -41,86 +53,71 @@ function WithServerMessage({ k, raw }) {
 
 function Spinner({ text }) {
   return (
-    <div className="flex items-center justify-center gap-3 py-16 text-teal-700" role="status">
-      <span className="w-5 h-5 rounded-full border-2 border-teal-200 border-t-teal-600 animate-spin" aria-hidden="true" />
+    <div className="flex items-center justify-center gap-3 py-16 text-brand-700" role="status">
+      <span className="w-5 h-5 rounded-full border-2 border-brand-200 border-t-brand-600 animate-spin" aria-hidden="true" />
       <span className="text-sm">{text}</span>
     </div>
   )
 }
 
-function Empty({ title, hint }) {
-  return (
-    <div className="text-center py-8 px-2">
-      <p className="font-semibold text-slate-700">{title}</p>
-      <p className="text-sm text-slate-500 mt-1">{hint}</p>
-    </div>
-  )
-}
-
-function Panel({ id, title, right, children, className = '' }) {
-  return (
-    <section aria-labelledby={id} className={`bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 ${className}`}>
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 id={id} className="font-bold text-slate-900">{title}</h2>
-        {right}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function Kpi({ icon, label, value, hint, tone }) {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 flex items-start gap-3 min-w-0">
-      <span className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center ${tone}`}><Icon name={icon} size={22} /></span>
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-600">{label}</p>
-        <div className="text-2xl font-bold text-slate-900 leading-tight mt-0.5 break-words">{value}</div>
-        <p className="text-xs text-slate-500 mt-0.5">{hint}</p>
-      </div>
-    </div>
-  )
-}
-
-const BAR = { pending: 'bg-amber-400', accepted: 'bg-teal-500', declined: 'bg-rose-400', cancelled: 'bg-slate-400' }
+const seenKey = id => `neurorelief_doctor_activity_seen_${id}`
+const readSeen = id => { try { return Number(localStorage.getItem(seenKey(id))) || 0 } catch { return 0 } }
 
 export default function DoctorDashboard() {
   const { user, logout } = useAuth()
   const { t } = useTranslation()
   const fmt = useFormat()
   const navigate = useNavigate()
+  const care = useCareStatus()
 
   const [view, setView] = useState('dashboard')
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [profile, setProfile] = useState(null)
-  const [profileError, setProfileError] = useState('')   // raw backend message, localized at render
-  const [requests, setRequests] = useState(null)      // null while the first load is running
+  const [profileError, setProfileError] = useState('')
+  const [requests, setRequests] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [busyId, setBusyId] = useState(null)
-  const [notice, setNotice] = useState(null)          // { type: 'success', key } | { type: 'error', raw }
+  const [notice, setNotice] = useState(null)
   const [bellOpen, setBellOpen] = useState(false)
   const [focusId, setFocusId] = useState(null)
   const [filter, setFilter] = useState('all')
-  const [reportsWaiting, setReportsWaiting] = useState(0)   // shared reports awaiting review (nav badge); 0 while the feature is off
+  const [reportsWaiting, setReportsWaiting] = useState(0)
+  const [dash, setDash] = useState(null)
+  const [activity, setActivity] = useState([])
+  const [seenCursor, setSeenCursor] = useState(() => readSeen(user?.user_id))
+  const [cursor, setCursor] = useState(0)
+  const [openAppt, setOpenAppt] = useState(null)
+  const [insightPatient, setInsightPatient] = useState(null)
+  const [notesPatient, setNotesPatient] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(null)
   const polling = useRef(false)
 
-  const loadRequests = useCallback(async (force = false) => {
+  // One refresh for everything the dashboard shows. Never two at once.
+  const refresh = useCallback(async (force = false) => {
     if (polling.current && !force) return
     polling.current = true
     try {
       setRequests(await getDoctorRequests())
       setLoadError('')
+      setUpdatedAt(Date.now())
     } catch (err) {
       setLoadError(err.message)
     } finally {
       polling.current = false
     }
-  }, [])
+    if (care.enabled) {
+      getDoctorDashboard().then(setDash).catch(() => {})
+      getCareActivity().then(a => { setActivity(a.items || []); setCursor(a.cursor || 0) }).catch(() => {})
+    }
+    getReportFeatureStatus().then(s => (s?.enabled === true ? getDoctorReportSummary() : null))
+      .then(c => { if (c) setReportsWaiting((c.submitted || 0) + (c.underReview || 0)) }).catch(() => {})
+  }, [care.enabled])
 
-  // First load, 30-second refresh, and refresh when the tab regains focus
   useEffect(() => {
-    loadRequests(true)
-    const timer = setInterval(() => loadRequests(), POLL_MS)
-    const onVisible = () => { if (document.visibilityState === 'visible') loadRequests() }
+    if (care.loading) return
+    refresh(true)
+    const timer = setInterval(() => refresh(), POLL_MS)
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
     window.addEventListener('focus', onVisible)
     document.addEventListener('visibilitychange', onVisible)
     return () => {
@@ -128,19 +125,10 @@ export default function DoctorDashboard() {
       window.removeEventListener('focus', onVisible)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [loadRequests])
+  }, [refresh, care.loading])
 
-  // Badge for the Report Verification item: only asked for when the server says the feature is enabled
-  useEffect(() => {
-    getReportFeatureStatus().then(s => (s?.enabled === true ? getDoctorReportSummary() : null))
-      .then(c => { if (c) setReportsWaiting((c.submitted || 0) + (c.underReview || 0)) }).catch(() => {})
-  }, [])
+  useEffect(() => { getDoctorProfile().then(setProfile).catch(err => setProfileError(err.message)) }, [])
 
-  useEffect(() => {
-    getDoctorProfile().then(setProfile).catch(err => setProfileError(err.message))
-  }, [])
-
-  // Briefly highlight the request opened from the notification bell
   useEffect(() => {
     if (focusId == null || !requests) return
     const timer = setTimeout(() => setFocusId(null), 4000)
@@ -154,14 +142,16 @@ export default function DoctorDashboard() {
     try {
       await updateRequestStatus(id, status)
       setNotice({ type: 'success', key: status === 'accepted' ? 'dd.noticeAccepted' : 'dd.noticeDeclined' })
-      await loadRequests(true)
+      await refresh(true)
     } catch (err) {
       setNotice({ type: 'error', raw: err.message })
-      loadRequests(true)
+      refresh(true)
     } finally {
       setBusyId(null)
     }
   }
+
+  function go(id) { setView(id); setDrawerOpen(false); setBellOpen(false) }
 
   function openRequest(r) {
     if (r.unread) {
@@ -169,34 +159,34 @@ export default function DoctorDashboard() {
       markRequestSeen(r.appointment_id).catch(() => {})
     }
     setFilter('all')
-    setView('requests')
+    go('requests')
     setFocusId(r.appointment_id)
+  }
+
+  function openActivity(a) {
     setBellOpen(false)
+    if (a.source === 'report') return go('reports')
+    if (a.type === 'message_sent') return go('messages')
+    if (a.appointmentId && care.enabled) setOpenAppt(a.appointmentId)
   }
 
   function markAllRead() {
     setRequests(prev => prev && prev.map(x => ({ ...x, unread: false })))
-    markAllRequestsSeen().catch(() => loadRequests(true))
+    markAllRequestsSeen().catch(() => refresh(true))
+    setSeenCursor(cursor)
+    try { localStorage.setItem(seenKey(user?.user_id), String(cursor)) } catch { /* private mode */ }
   }
 
-  function handleLogout() {
-    logout()
-    navigate('/auth')
-  }
+  function handleLogout() { logout(); navigate('/auth') }
 
   const list = requests || []
   const pending = list.filter(r => r.status === 'pending')
-  const accepted = list.filter(r => r.status === 'accepted').sort(byWhen)
-  const today = todayLocal()
-  const upcoming = accepted.filter(r => r.date >= today)
-  const past = accepted.filter(r => r.date < today)
-  const todays = accepted.filter(r => r.date === today)
-  const next = accepted.find(r => isStillAhead(r)) || null
   const unread = list.filter(r => r.unread)
+  const newActivity = activity.filter(a => a.source === 'appointment' && a.eventId > seenCursor && a.type !== 'requested')
+  const bellCount = unread.length + newActivity.length
   const denied = isAccessDenied(loadError)
-  const rowProps = { busyId, onDecide: decide }
-
-  const counts = ['pending', 'accepted', 'declined', 'cancelled'].map(s => ({ s, n: list.filter(r => r.status === s).length }))
+  const rowProps = { busyId, onDecide: decide, onOpen: care.enabled ? setOpenAppt : undefined }
+  const openInsights = id => { setInsightPatient(id); setOpenAppt(null); go('insights') }
 
   function renderBody() {
     if (denied) {
@@ -206,7 +196,7 @@ export default function DoctorDashboard() {
           <h2 className="text-lg font-bold text-slate-900">{t('dd.deniedTitle')}</h2>
           <p className="text-sm text-slate-600 mt-2">{t('dd.deniedText')}</p>
           <p className="text-xs text-slate-400 mt-2"><ServerMessage message={loadError} /></p>
-          <button onClick={handleLogout} className="mt-5 px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">{t('dd.deniedAction')}</button>
+          <button onClick={handleLogout} className="mt-5 px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold">{t('dd.deniedAction')}</button>
         </div>
       )
     }
@@ -216,214 +206,147 @@ export default function DoctorDashboard() {
         <div role="alert" className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center">
           <p className="text-rose-800 font-semibold">{t('dd.loadFail')}</p>
           <p className="text-sm text-rose-700 mt-1"><ServerMessage message={loadError} /></p>
-          <button onClick={() => loadRequests(true)} className="mt-3 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-200">{t('common.tryAgain')}</button>
+          <button onClick={() => refresh(true)} className="mt-3 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-semibold">{t('common.tryAgain')}</button>
         </div>
       )
     }
-
-    if (view === 'requests') {
-      return <RequestQueue list={list} filter={filter} setFilter={setFilter} focusId={focusId} {...rowProps} />
+    const item = ALL.find(n => n.id === view)
+    if (item?.care && !care.enabled) return <CareUnavailable />
+    switch (view) {
+      case 'requests': return <RequestQueue list={list} filter={filter} setFilter={setFilter} focusId={focusId} {...rowProps} />
+      case 'calendar': return <DoctorCalendar list={list} {...rowProps} />
+      case 'appointments': return care.enabled ? <AppointmentsView requests={list} onOpenAppointment={setOpenAppt} /> : <DoctorCalendar list={list} {...rowProps} />
+      case 'reports': return <ReportVerification doctorName={profile?.name || user?.name || ''} onSummary={setReportsWaiting} />
+      case 'patients': return <PatientsView onOpenInsights={openInsights} onOpenNotes={id => { setNotesPatient(id); go('notes') }} />
+      case 'notes': return <NotesView patientId={notesPatient} onClearPatient={() => setNotesPatient(null)} />
+      case 'messages': return <MessagesView />
+      case 'followups': return <FollowUpsView />
+      case 'insights': return <InsightsView patientId={insightPatient} onPickPatient={setInsightPatient} />
+      case 'explorer': return <Suspense fallback={<Spinner text="Loading 3D explorer…" />}><Device3DExplorer /></Suspense>
+      case 'settings': return <SettingsView profile={profile} careEnabled={care.enabled} />
+      default:
+        return <DashboardHome requests={list} dash={dash} activity={activity} reportsWaiting={reportsWaiting} careEnabled={care.enabled}
+          onNavigate={go} onOpenAppointment={id => (care.enabled ? setOpenAppt(id) : go('requests'))} updatedAt={updatedAt} onRefresh={() => refresh(true)} />
     }
+  }
 
-    if (view === 'reports') {
-      return <ReportVerification doctorName={profile?.name || user?.name || ''} onSummary={setReportsWaiting} />
-    }
-
-    if (view === 'calendar') {
-      return <DoctorCalendar list={list} {...rowProps} />
-    }
-
-    if (view === 'appointments') {
-      return (
-        <div className="space-y-4">
-          <Panel id="up-h" title={t('dd.upcomingConfirmed')}>
-            {upcoming.length === 0
-              ? <Empty title={t('dd.noUpcoming')} hint={t('dd.noUpcomingHint')} />
-              : <ul className="space-y-2">{upcoming.map(r => <RequestRow key={r.appointment_id} r={r} {...rowProps} />)}</ul>}
-          </Panel>
-          {past.length > 0 && (
-            <Panel id="past-h" title={t('dd.pastConfirmed')}>
-              <ul className="space-y-2">{[...past].reverse().map(r => <RequestRow key={r.appointment_id} r={r} {...rowProps} />)}</ul>
-            </Panel>
-          )}
-        </div>
-      )
-    }
-
+  const badge = id => {
+    const n = id === 'requests' ? pending.length : id === 'reports' ? reportsWaiting : id === 'messages' ? (dash?.unreadMessages || 0) : 0
+    return n > 0 ? n : null
+  }
+  const navButton = n => {
+    const active = view === n.id
+    const b = badge(n.id)
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <Kpi icon="clock" tone="bg-amber-50 text-amber-700" label={t('dd.pendingReq')} value={fmt.number(pending.length)} hint={t('dd.kpiPendingHint')} />
-          <Kpi icon="calendar" tone="bg-teal-50 text-teal-700" label={t('dd.kpiToday')} value={fmt.number(todays.length)} hint={t('dd.kpiTodayHint')} />
-          <Kpi icon="check" tone="bg-sky-50 text-sky-700" label={t('dd.upcomingAppts')} value={fmt.number(upcoming.length)} hint={t('dd.kpiUpcomingHint')} />
-          <Kpi icon="stethoscope" tone="bg-brand-50 text-brand-700" label={t('dd.kpiNext')}
-            value={next ? <span className="text-lg">{next.patient_name}</span> : <span className="text-lg text-slate-500">{t('dd.kpiNextNone')}</span>}
-            hint={next ? t('header.dateAtTime', { date: fmt.isoDate(next.date), time: fmt.time(next.time) }) : ' '} />
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="xl:col-span-2 space-y-4 min-w-0">
-            <Panel id="pend-h" title={t('dd.pendingReq')}
-              right={pending.length > 5 && <button onClick={() => { setFilter('pending'); setView('requests') }} className="text-sm font-semibold text-teal-700 hover:underline">{t('dd.viewAll', { n: fmt.number(pending.length) })}</button>}>
-              {pending.length === 0
-                ? <Empty title={t('dd.noPending')} hint={t('dd.caughtUp')} />
-                : <ul className="space-y-2">{pending.slice(0, 5).map(r => <RequestRow key={r.appointment_id} r={r} highlighted={focusId === r.appointment_id} {...rowProps} />)}</ul>}
-            </Panel>
-            <Panel id="soon-h" title={t('dd.upcomingAppts')}>
-              {upcoming.length === 0
-                ? <Empty title={t('dd.noUpcoming')} hint={t('dd.noUpcomingHint')} />
-                : <ul className="space-y-2">{upcoming.slice(0, 5).map(r => <RequestRow key={r.appointment_id} r={r} {...rowProps} />)}</ul>}
-            </Panel>
-          </div>
-
-          <div className="space-y-4 min-w-0">
-            <Panel id="today-h" title={t('dd.todayTitle')}>
-              {todays.length === 0
-                ? <p className="text-sm text-slate-500 py-2">{t('dd.todayNone')}</p>
-                : <ul className="space-y-2">{todays.map(r => (
-                    <li key={r.appointment_id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3">
-                      <span className="shrink-0 text-sm font-semibold text-teal-700 w-20">{fmt.time(r.time)}</span>
-                      <span className="min-w-0 font-medium text-slate-900 break-words">{r.patient_name}</span>
-                    </li>
-                  ))}</ul>}
-            </Panel>
-            <Panel id="status-h" title={t('dd.statusOverview')}>
-              {list.length === 0
-                ? <p className="text-sm text-slate-500 py-2">{t('dd.noneHint')}</p>
-                : (
-                  <>
-                    <div className="flex h-3 rounded-full overflow-hidden bg-slate-100" role="img"
-                      aria-label={counts.map(c => `${t(`apptStatus.${c.s}`)}: ${fmt.number(c.n)}`).join(', ')}>
-                      {counts.filter(c => c.n > 0).map(c => <span key={c.s} className={BAR[c.s]} style={{ width: `${(c.n / list.length) * 100}%` }} />)}
-                    </div>
-                    <ul className="mt-3 space-y-1.5">
-                      {counts.map(c => (
-                        <li key={c.s} className="flex items-center justify-between gap-3 text-sm">
-                          <span className="flex items-center gap-2 text-slate-700 min-w-0"><span className={`shrink-0 w-2.5 h-2.5 rounded-full ${BAR[c.s]}`} aria-hidden="true" /><span className="break-words">{t(`apptStatus.${c.s}`)}</span></span>
-                          <span className="font-semibold text-slate-900">{fmt.number(c.n)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="text-xs text-slate-500 mt-3">{t('dd.statusOverviewHint', { n: fmt.number(list.length) })}</p>
-                  </>
-                )}
-            </Panel>
-          </div>
-        </div>
-      </div>
+      <button key={n.id} onClick={() => go(n.id)} aria-current={active ? 'page' : undefined}
+        className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[15px] font-medium transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200 ${
+          active ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'text-[#1f2a44] hover:bg-slate-50'}`}>
+        <Icon name={n.icon} size={19} className={active ? 'text-brand-600' : 'text-slate-500'} />
+        <span className="flex-1 text-left">{n.label}</span>
+        {b !== null && <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${active ? 'bg-brand-600 text-white' : 'bg-brand-100 text-brand-800'}`}>{fmt.number(b)}</span>}
+      </button>
     )
   }
 
-  const navBtn = (n, mobile) => (
-    <button key={n.id} onClick={() => setView(n.id)} aria-current={view === n.id ? 'page' : undefined}
-      className={`whitespace-nowrap text-left rounded-xl text-sm font-medium transition flex items-center gap-3 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200 ${mobile ? 'px-3 py-2' : 'px-3.5 py-2.5 w-full'} ${
-        view === n.id ? 'bg-brand-50 text-brand-800 font-semibold ring-1 ring-brand-200' : 'text-slate-700 hover:bg-slate-100'
-      }`}>
-      <Icon name={n.icon} size={18} className={view === n.id ? 'text-brand-600' : 'text-slate-500'} />
-      <span>{t(`dd.${n.key}`)}</span>
-      {n.id === 'reports' && reportsWaiting > 0 && (
-        <span className={`${mobile ? '' : 'ml-auto'} text-xs font-semibold px-1.5 py-0.5 rounded-full ${view === n.id ? 'bg-brand-600 text-white' : 'bg-amber-100 text-amber-800'}`}>{fmt.number(reportsWaiting)}</span>
-      )}
-      {n.id === 'requests' && pending.length > 0 && (
-        <span className={`${mobile ? '' : 'ml-auto'} text-xs font-semibold px-1.5 py-0.5 rounded-full ${view === n.id ? 'bg-brand-600 text-white' : 'bg-amber-100 text-amber-800'}`}>{fmt.number(pending.length)}</span>
-      )}
-    </button>
+  const doctorName = profile?.name || user?.name || t('dd.doctorFallback')
+  const firstName = doctorName.replace(/^Dr\.?\s*/i, '').split(' ')[0]
+  const current = ALL.find(n => n.id === view)
+
+  const sidebar = (
+    <div className="h-full flex flex-col bg-white border-r border-slate-200 px-4 py-5">
+      <p className="flex items-center gap-2.5 px-2 mb-6 text-xl font-extrabold text-[#1f2a44]">
+        <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center" aria-hidden="true"><Icon name="heart" size={19} /></span>
+        <span>NeuroRelief <span className="text-brand-500">AI</span></span>
+      </p>
+      <nav className="flex flex-col gap-0.5 overflow-y-auto" aria-label={t('dd.navLabel')}>
+        {NAV.map(navButton)}
+        <p className="px-3.5 mt-5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Clinical tools</p>
+        {TOOLS.map(navButton)}
+      </nav>
+      <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-0.5">
+        {navButton({ id: 'settings', label: 'Settings', icon: 'settings' })}
+        <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[15px] font-medium text-[#1f2a44] hover:bg-slate-50">
+          <Icon name="logout" size={19} className="text-slate-500" /> {t('nav.logout')}
+        </button>
+      </div>
+    </div>
   )
 
-  const doctorName = profile?.name || user?.name || t('dd.doctorFallback')
-  const title = t(`dd.${navItems.find(n => n.id === view).key}`)
-
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
-      {/* Sidebar */}
-      <aside className="md:w-64 md:shrink-0 bg-white md:sticky md:top-0 md:h-screen p-3 md:p-5 flex flex-col gap-3 border-b md:border-b-0 md:border-r border-slate-200">
-        <p className="flex items-center gap-2 text-xl font-extrabold text-brand-800 md:mb-3">
-          <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-white flex items-center justify-center" aria-hidden="true"><Icon name="heart" size={18} /></span>
-          <span>NeuroRelief <span className="text-brand-500">AI</span></span>
-        </p>
-        <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={t('dd.navLabel')}>
-          {navItems.map(n => navBtn(n, false))}
-        </nav>
-        <div className="hidden md:block mt-4" aria-label={t('dd.comingLater')} role="group">
-          <p className="px-3.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('dd.comingLater')}</p>
-          {plannedItems.map(n => (
-            <div key={n.key} aria-disabled="true" title={t('dd.notAvailable')}
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-slate-400 cursor-not-allowed select-none">
-              <Icon name={n.icon} size={18} />
-              <span>{t(`dd.${n.key}`)}</span>
-              <span className="ml-auto text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">{t('dd.soon')}</span>
-            </div>
-          ))}
+    <div className="min-h-screen bg-[#f7f8fb]">
+      <aside className="hidden lg:block fixed inset-y-0 left-0 w-64 z-30">{sidebar}</aside>
+      {drawerOpen && (
+        <div className="lg:hidden fixed inset-0 z-40">
+          <button className="absolute inset-0 bg-black/30" aria-label={t('nav.closeMenu')} onClick={() => setDrawerOpen(false)} />
+          <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] shadow-2xl">{sidebar}</div>
         </div>
-        <button onClick={handleLogout} className="hidden md:flex md:mt-auto items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">
-          <Icon name="logout" size={18} className="text-slate-500" /> {t('nav.logout')}
-        </button>
-      </aside>
+      )}
 
-      <div className="flex-1 min-w-0">
-        {/* Top bar */}
-        <header className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6 py-3 bg-white/90 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-30">
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 md:px-8 py-3 bg-white/95 backdrop-blur border-b border-slate-200">
           <div className="flex items-center gap-3 min-w-0">
+            <button className="lg:hidden p-2 -ml-2 rounded-lg text-[#1f2a44] hover:bg-slate-100" onClick={() => setDrawerOpen(true)} aria-label={t('nav.openMenu')}><Icon name="menu" /></button>
             <span aria-hidden="true" className="shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white font-bold text-sm flex items-center justify-center">{initials(doctorName)}</span>
             <div className="min-w-0">
-              <p className="font-bold text-slate-900 break-words leading-tight">{doctorName}</p>
-              <p className="text-sm text-teal-700 break-words">{profile?.specialty ? t(`specialty.${profile.specialty}`, { defaultValue: profile.specialty }) : (profileError ? t('dd.profileUnavailable') : ' ')}</p>
+              <p className="font-bold text-[#1f2a44] truncate leading-tight">{doctorName}</p>
+              <p className="text-sm text-brand-600 truncate">{profile?.specialty ? t(`specialty.${profile.specialty}`, { defaultValue: profile.specialty }) : (profileError ? t('dd.profileUnavailable') : ' ')}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
             <LanguageSelector />
-            <p className="hidden lg:block text-sm text-slate-500">
-              {fmt.date(Date.now(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-            </p>
+            <p className="hidden xl:block text-sm text-slate-500">{fmt.date(Date.now(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
             <div className="relative">
-              <button onClick={() => setBellOpen(o => !o)} aria-expanded={bellOpen} aria-label={t('header.notificationsUnread', { count: unread.length })}
-                className="relative w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">
+              <button onClick={() => setBellOpen(o => !o)} aria-expanded={bellOpen} aria-label={t('header.notificationsUnread', { count: bellCount })}
+                className="relative w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-[#1f2a44]">
                 <Icon name="bell" size={22} />
-                {unread.length > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-brand-500 text-white text-xs font-bold flex items-center justify-center">{fmt.number(unread.length)}</span>
-                )}
+                {bellCount > 0 && <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-brand-500 text-white text-xs font-bold flex items-center justify-center">{fmt.number(bellCount)}</span>}
               </button>
               {bellOpen && (
                 <>
                   <button className="fixed inset-0 z-40 cursor-default" aria-label={t('header.closeNotifications')} onClick={() => setBellOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-80 max-w-[85vw] bg-white rounded-2xl shadow-xl border border-slate-200 z-50 p-3">
+                  <div className="absolute right-0 mt-2 w-96 max-w-[90vw] bg-white rounded-2xl shadow-xl border border-slate-200 z-50 p-3">
                     <div className="flex items-center justify-between gap-2 px-1 pb-2">
-                      <p className="font-semibold text-slate-900 text-sm">{t('dd.newRequests')}</p>
-                      {unread.length > 0 && <button onClick={markAllRead} className="text-xs text-teal-700 font-semibold hover:underline">{t('dd.markAllRead')}</button>}
+                      <p className="font-semibold text-[#1f2a44] text-sm">Notifications</p>
+                      {bellCount > 0 && <button onClick={markAllRead} className="text-xs text-brand-700 font-semibold hover:underline">{t('dd.markAllRead')}</button>}
                     </div>
-                    {unread.length === 0
-                      ? <p className="text-sm text-slate-500 px-1 py-4 text-center">{t('dd.noNew')}</p>
-                      : <ul className="max-h-72 overflow-y-auto space-y-1">
-                          {unread.map(r => (
-                            <li key={r.appointment_id}>
-                              <button onClick={() => openRequest(r)} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300">
-                                <p className="text-sm font-medium text-slate-900">{t('dd.requested', { patient: r.patient_name })}</p>
-                                <p className="text-xs text-slate-500">{t('header.dateAtTime', { date: fmt.isoDate(r.date), time: fmt.time(r.time) })}</p>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>}
+                    {bellCount === 0 ? <p className="text-sm text-slate-500 px-1 py-4 text-center">{t('dd.noNew')}</p> : (
+                      <ul className="max-h-80 overflow-y-auto space-y-1">
+                        {unread.map(r => (
+                          <li key={`r${r.appointment_id}`}>
+                            <button onClick={() => openRequest(r)} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50">
+                              <p className="text-sm font-medium text-[#1f2a44]">{t('dd.requested', { patient: r.patient_name })}</p>
+                              <p className="text-xs text-slate-500">{t('header.dateAtTime', { date: fmt.isoDate(r.date), time: fmt.time(r.time) })}</p>
+                            </button>
+                          </li>
+                        ))}
+                        {newActivity.map(a => (
+                          <li key={a.eventId}>
+                            <button onClick={() => openActivity(a)} className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 flex gap-2">
+                              <Icon name={eventIcon(a.type)} size={16} className="text-brand-600 mt-0.5 shrink-0" />
+                              <span><span className="block text-sm text-[#1f2a44]">{eventText(a, 'doctor')}</span><span className="block text-xs text-slate-500">{ago(a.createdAt)}</span></span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </>
               )}
             </div>
-            <button onClick={handleLogout} className="md:hidden w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200" aria-label={t('nav.logout')} title={t('nav.logout')}>
-              <Icon name="logout" size={20} />
-            </button>
           </div>
         </header>
 
-        <main className="px-4 md:px-6 py-5 max-w-[1280px]">
-          <h1 className="text-2xl font-bold text-slate-900 mb-4">{title}</h1>
-
+        <main className="px-4 md:px-8 py-6 max-w-[1400px]">
+          <div className="mb-5">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#1f2a44]">{current?.label}</h1>
+            {view === 'dashboard' && <p className="text-[15px] font-medium text-slate-600 mt-1">Welcome back, {firstName.startsWith('Dr') ? firstName : `Dr. ${firstName}`}.</p>}
+          </div>
           {profileError && !denied && (
-            <div role="alert" className="mb-4 bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl px-4 py-3">
-              <WithServerMessage k="dd.profileErr" raw={profileError} />
-            </div>
+            <div role="alert" className="mb-4 bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl px-4 py-3"><WithServerMessage k="dd.profileErr" raw={profileError} /></div>
           )}
           <div aria-live="polite">
             {notice && (
-              <div className={`mb-4 text-sm rounded-xl px-4 py-3 border flex items-start justify-between gap-3 ${notice.type === 'success' ? 'bg-teal-50 border-teal-200 text-teal-900' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>
+              <div className={`mb-4 text-sm rounded-xl px-4 py-3 border flex items-start justify-between gap-3 ${notice.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>
                 <span>{notice.key ? t(notice.key) : <WithServerMessage k="dd.noticeError" raw={notice.raw} />}</span>
                 <button onClick={() => setNotice(null)} className="text-xs underline shrink-0">{t('common.dismiss')}</button>
               </div>
@@ -432,16 +355,18 @@ export default function DoctorDashboard() {
           {requests !== null && loadError && !denied && (
             <div role="alert" className="mb-4 bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-xl px-4 py-3 flex items-center justify-between gap-3">
               <span><WithServerMessage k="dd.refreshFail" raw={loadError} /></span>
-              <button onClick={() => loadRequests(true)} className="text-xs underline shrink-0">{t('common.retry')}</button>
+              <button onClick={() => refresh(true)} className="text-xs underline shrink-0">{t('common.retry')}</button>
             </div>
           )}
-
           {renderBody()}
-          <p className="text-xs text-slate-400 mt-6">
-            {t('dd.footnote')}
-          </p>
+          <p className="text-xs text-slate-400 mt-6">{t('dd.footnote')}</p>
         </main>
       </div>
+
+      {openAppt && (
+        <AppointmentDrawer key={openAppt} appointmentId={openAppt} profileDays={profile?.days || []}
+          onClose={() => setOpenAppt(null)} onChanged={() => refresh(true)} onOpenInsights={openInsights} />
+      )}
     </div>
   )
 }

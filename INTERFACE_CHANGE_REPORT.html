@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuroRelief AI — Interface &amp; Feature Change Report</title>
+<style>
+  :root { --brand:#9d174d; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --soft:#fdf2f8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:#fafafa; }
+  main { max-width:980px; margin:0 auto; padding:32px 20px 64px; }
+  header { background:linear-gradient(135deg,#fce7f3,#ede9fe); border-radius:18px; padding:28px; margin-bottom:28px; }
+  header h1 { margin:0 0 6px; font-size:1.9rem; color:#831843; }
+  header p { margin:2px 0; color:#4b5563; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin:20px 0 0; }
+  .stat { background:#fff; border-radius:12px; padding:12px 14px; }
+  .stat b { display:block; font-size:1.4rem; color:var(--brand); }
+  .stat span { font-size:.8rem; color:var(--muted); }
+  h2 { margin:36px 0 10px; font-size:1.3rem; color:#831843; border-bottom:2px solid #fbcfe8; padding-bottom:6px; }
+  h3 { margin:18px 0 6px; font-size:1.05rem; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; font-size:.9rem; margin:10px 0; }
+  th { background:#faf5ff; color:#6b21a8; text-align:left; padding:9px 12px; border-bottom:1px solid #e9d5ff; }
+  td { padding:9px 12px; border-bottom:1px solid #f3f4f6; vertical-align:top; }
+  tr:last-child td { border-bottom:0; }
+  ul { padding-left:1.2rem; } li { margin:3px 0; }
+  code { background:#f3f4f6; padding:1px 6px; border-radius:5px; font-size:.85em; }
+  .tag { display:inline-block; font-size:.7rem; font-weight:700; padding:1px 8px; border-radius:99px; margin-left:6px; }
+  .new { background:#dcfce7; color:#166534; } .unc { background:#fef3c7; color:#92400e; }
+  .note { background:var(--soft); border:1px solid #fbcfe8; border-radius:12px; padding:12px 16px; margin:16px 0; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .card h3 { margin-top:0; }
+  @media (max-width:700px){ .cols{grid-template-columns:1fr;} }
+  @media print { body{background:#fff;} header{background:#fff;border:1px solid #000;} h2{break-after:avoid;} table,.card{break-inside:avoid;} }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>NeuroRelief AI — Interface &amp; Feature Change Report</h1>
+  <p><b>Baseline:</b> commit <code>f9d4df6</code> (Initial commit)</p>
+  <p><b>Current:</b> branch <code>report-audit</code> (commit <code>6af9c12</code>) plus uncommitted working-tree changes</p>
+  <p>Generated 2026-10-30</p>
+  <div class="stats">
+    <div class="stat"><b>115</b><span>files changed since baseline</span></div>
+    <div class="stat"><b>+19,435</b><span>lines added</span></div>
+    <div class="stat"><b>−1,575</b><span>lines removed</span></div>
+    <div class="stat"><b>~57</b><span>further files modified or new, uncommitted</span></div>
+  </div>
+</header>
+
+<h2>1. Executive summary</h2>
+<table>
+  <tr><th>Area</th><th>Initial app</th><th>Current app</th></tr>
+  <tr><td>Layout</td><td>Top navbar + horizontal tab bar, "Welcome" banner</td><td>Left sidebar (drawer on mobile), greeting header, notification bell, profile menu, botanical illustration and quote</td></tr>
+  <tr><td>Roles</td><td>Patient only</td><td>Patient, <b>Doctor Portal</b>, Admin placeholder, role-based routing</td></tr>
+  <tr><td>Languages</td><td>English hard-coded</td><td>English, Hindi, Kannada, Tamil, Telugu with per-script fonts and layout tuning</td></tr>
+  <tr><td>Login</td><td>Simple two-column card</td><td>Split-screen login, Patient/Doctor role tabs, rotating quotes, doctor portal mode, remember-me</td></tr>
+  <tr><td>Patient tabs</td><td>7</td><td>9 (added <b>Report Audit</b>, <b>Device 3D Explorer</b>)</td></tr>
+  <tr><td>Doctor ↔ patient</td><td>Book an appointment only</td><td>Full care loop: requests, reschedule/propose, notes, chat, follow-ups, consented record sharing</td></tr>
+  <tr><td>Reports</td><td>None</td><td>Report Audit: create/upload, preview, share under consent, encrypted storage, doctor verification</td></tr>
+  <tr><td>Backend</td><td>auth, cycles, mood, predict, doctors, scans</td><td>+ reports, care, assistant routes; encryption, audit, migrations, rate limiting, tests</td></tr>
+</table>
+
+<h2>2. Global shell and navigation</h2>
+<div class="cols">
+  <div class="card"><h3>Initial</h3>
+    <ul>
+      <li>Top <code>Navbar</code> and horizontally scrolling <code>TabBar</code> with 7 tabs: Overview, Cycle, Mood, Symptom, Doctor, Device, Learn.</li>
+      <li>Gradient "Welcome to NeuroRelief AI" banner with one initial button that toggled the profile panel.</li>
+    </ul></div>
+  <div class="card"><h3>Current</h3>
+    <ul>
+      <li>Sidebar with icons, active highlight, logo, tagline, botanical illustration and italic quote; slide-in drawer on small screens.</li>
+      <li>Header with first-name greeting, tab title and subtitle, language selector, bell, profile menu (Settings, Log out).</li>
+      <li>Floating doctor chat widget on every patient tab.</li>
+      <li>Fit-to-screen mode for Symptom Advisor, Doctor and Device tabs on laptop viewports.</li>
+      <li>New icon set and serif display font for headings.</li>
+    </ul></div>
+</div>
+<h3>Notification bell</h3>
+<ul>
+  <li>Shows doctor responses (accepted/declined) and, with care-sync, a unified feed of appointment events, notes and messages.</li>
+  <li>Unread counts persist in localStorage; polled every 30 s and on window focus.</li>
+</ul>
+<h3>Routing</h3>
+<ul>
+  <li><code>ProtectedRoute</code> with role checks and loop-free redirects.</li>
+  <li>New routes <code>/doctor</code> (doctor) and <code>/admin</code> (admin placeholder). Old <code>Navbar</code>/<code>TabBar</code> remain only on <code>/scan</code>, <code>/past-scans</code> and <code>/analyze-report</code>.</li>
+</ul>
+
+<h2>3. Authentication page</h2>
+<ul>
+  <li><b>Before:</b> 900 px two-card layout, four feature tiles, sign-in/sign-up pill toggle, plain fields.</li>
+  <li><b>After:</b> full split-screen design with hero headline, rotating quote carousel with dots, new botanical illustration, Patient/Doctor role tabs, icon-led fields, show/hide password, remember-me, forgot-password and Google notices, loading spinner, disclaimer.</li>
+  <li><code>?portal=doctor</code> switches to a doctor-only login (no sign-up) and detects a signed-in patient switching to doctor login.</li>
+  <li>Session handling moved to the new <code>session.js</code> and an updated <code>AuthContext</code>.</li>
+</ul>
+
+<h2>4. Patient tabs</h2>
+<table>
+  <tr><th>Tab</th><th>Changes</th></tr>
+  <tr><td>Overview</td><td>Rewritten and translated. Summary cards (cycles, mood check-ins, upcoming appointment, latest prediction), recent activity, quick actions.</td></tr>
+  <tr><td>Cycle Tracking</td><td>Redesigned and translated; <code>PainCalendar</code> reworked; insight text clamp for long scripts.</td></tr>
+  <tr><td>Mood &amp; Wellness</td><td>Redesigned. Embeds the new Symptom Logger (type, 0–10 pain, date, area, description), shared with a doctor only through explicit consent.</td></tr>
+  <tr><td>AI Symptom Advisor</td><td>Compact fit-screen layout (symptom tiles, illustrated tips) and a Voice Assistant overlay, backed by the new <code>/api/assistant</code> route.</td></tr>
+  <tr><td>Doctor Connect</td><td>Hero banner, search with specialisation/availability/sort filters, doctor cards with photos (5 added), profile drawer, booking, My Appointments (upcoming/past, cancel confirm), Emergency quick action (call 112, nearby hospitals), health tips. Opens the Patient Appointment Modal (reschedule, respond to proposals, view notes, share records) and chat.</td></tr>
+  <tr><td>Report Audit <span class="tag new">NEW</span></td><td>See section 5.</td></tr>
+  <tr><td>Device Control</td><td>Rewritten and compacted: connection, battery, TENS intensity/frequency, heat temperature, sessions with before/after pain, history.</td></tr>
+  <tr><td>Device 3D Explorer <span class="tag new">NEW</span> <span class="tag unc">UNCOMMITTED</span></td><td>See section 6.</td></tr>
+  <tr><td>Learn</td><td>Translated, with illustrated tip cards (movement, nutrition, sleep, water).</td></tr>
+</table>
+
+<h2>5. Report Audit <span class="tag new">NEW</span></h2>
+<div class="cols">
+  <div class="card"><h3>Patient</h3><ul>
+    <li>Stats counters, create report with date range and sections, live preview.</li>
+    <li>Upload a PDF; history list; report detail with activity log.</li>
+    <li>Share wizard with versioned consent text and revoke.</li>
+    <li>Print/PDF-ready document (A4 rules); AI content labelled; disclaimers.</li>
+    <li>Placeholder shown when the backend feature is not configured.</li>
+  </ul></div>
+  <div class="card"><h3>Doctor</h3><ul>
+    <li>Inbox with status filter and search.</li>
+    <li>Open a shared report or its uploaded file.</li>
+    <li>Set verification status and add notes.</li>
+  </ul></div>
+</div>
+<p><b>Backend:</b> <code>routes/reports.js</code>; <code>lib/reportService</code>, <code>reportCrypto</code>, <code>reportConsent</code>, <code>reportSnapshot</code>, <code>reportFiles</code>; schemas and migrations; encryption at rest (<code>docs/REPORT_ENCRYPTION.md</code>); private encrypted file store outside OneDrive; 8 MB limit on the upload route only; migration and restore rehearsal scripts with a runbook; verification script; five test suites.</p>
+
+<h2>6. Device 3D Explorer <span class="tag new">NEW</span> <span class="tag unc">UNCOMMITTED</span></h2>
+<ul>
+  <li>Interactive three.js scene (<code>three</code>, <code>@react-three/fiber</code>, <code>@react-three/drei</code> added), lazy-loaded when the tab opens.</li>
+  <li>Views: wearable, full assembly, isometric, 7-layer exploded belt, component viewer with specs, Working Simulation timeline.</li>
+  <li>Based on the project's own hardware spec: belt 100×900 mm, 5 V silicone heating pad, DS18B20 sensor, ESP32 NodeMCU-32S; TENS shown as a separate commercial unit.</li>
+  <li>Values are illustrative and an on-screen disclaimer says it is an educational prototype. English only by design. Doctors get it too, never Device Control.</li>
+</ul>
+
+<h2>7. Doctor Portal <span class="tag new">NEW</span></h2>
+<table>
+  <tr><th>Section</th><th>Purpose</th></tr>
+  <tr><td>Dashboard</td><td>Overview, pending requests, reports awaiting review, activity feed</td></tr>
+  <tr><td>Patients*</td><td>Patient list and consented records</td></tr>
+  <tr><td>Appointment Requests</td><td>Accept/decline queue with seen/unseen tracking</td></tr>
+  <tr><td>Calendar</td><td>Month view of appointments</td></tr>
+  <tr><td>Appointments*</td><td>List plus drawer: timeline, propose new time, complete, cancel, notes, messages</td></tr>
+  <tr><td>Consultation Notes*</td><td>Create/edit notes, follow-up instructions, summaries</td></tr>
+  <tr><td>Report Verification</td><td>Review shared patient reports (section 5)</td></tr>
+  <tr><td>Patient Messages*</td><td>Per-appointment chat threads</td></tr>
+  <tr><td>Follow-up Centre*</td><td>Open follow-ups</td></tr>
+  <tr><td>Patient Insights*</td><td>Aggregated insights</td></tr>
+  <tr><td>Device 3D Explorer</td><td>Section 6</td></tr>
+  <tr><td>Settings</td><td>Doctor profile</td></tr>
+</table>
+<p>* Needs the clinical-sync schema; otherwise a "care unavailable" state is shown.</p>
+
+<h2>8. Patient ↔ Doctor care synchronisation <span class="tag unc">UNCOMMITTED</span></h2>
+<ul>
+  <li><b>Appointment lifecycle:</b> requested → accepted/declined → patient reschedule or doctor-proposed time → completed/cancelled; each step stored in <code>appointment_events</code>.</li>
+  <li><b>Messaging:</b> per-appointment encrypted threads, allowed only between the two parties while pending, accepted, or within the follow-up window after completion.</li>
+  <li><b>Notes and follow-ups:</b> written by the doctor, visible to the patient.</li>
+  <li><b>Record sharing:</b> patient grants a doctor chosen categories for a date range, purpose and expiry, under pinned consent text <code>records-consent-v1</code> (SHA-256 verified); revocable. An appointment alone grants no access.</li>
+  <li>Symptom and therapy-session logging endpoints.</li>
+  <li>Shared slot rules (6 slots, weekdays, 60-day horizon, clash detection) for booking and rescheduling.</li>
+  <li><b>Backend:</b> <code>routes/care.js</code> (~30 endpoints), <code>lib/clinicalService.js</code>, <code>db/clinicalSchema.js</code> (7 tables incl. <code>clinical_audit_events</code>), <code>scripts/migrate-clinical.js</code>, test <code>care-sync.test.mjs</code>.</li>
+</ul>
+
+<h2>9. Internationalisation</h2>
+<ul>
+  <li><code>react-i18next</code> with five locale files (en, hi, kn, ta, te; about 1,460 keys each), <code>LanguageSelector</code>, <code>useFormat</code> for numbers, dates and times, localised server messages, an "English only" badge for untranslated content.</li>
+  <li>CSS for Devanagari, Kannada, Tamil and Telugu: Noto fonts, looser line heights, smaller hero text, re-flowed grids.</li>
+  <li><code>en.json</code> has about 52 new uncommitted keys not yet mirrored in the other four locales.</li>
+</ul>
+
+<h2>10. Backend and infrastructure</h2>
+<ul>
+  <li><b>New routes:</b> <code>/api/reports</code>, <code>/api/care</code>, <code>/api/assistant</code>.</li>
+  <li><b>Security:</b> hardened auth middleware with role checks, rate limiting, encryption at rest, versioned consent text, audit events.</li>
+  <li><b>Database:</b> transaction helper, scratch-DB guard, report and clinical schemas with <code>schema_migrations</code>.</li>
+  <li><b>Doctors route:</b> booking validated by shared slot rules, request seen/unseen, status updates.</li>
+  <li><b>Tooling:</b> <code>.env.example</code>, seed scripts, PowerShell migration and rehearsal scripts, verification script, new README setup guide.</li>
+  <li><b>Tests:</b> six suites with shared harnesses.</li>
+  <li><b>Dependencies:</b> frontend adds i18next, react-i18next, three, @react-three/fiber, @react-three/drei.</li>
+</ul>
+
+<h2>11. Commit status</h2>
+<table>
+  <tr><th>Stage</th><th>Contents</th></tr>
+  <tr><td><code>f9d4df6</code></td><td>Original app</td></tr>
+  <tr><td><code>6af9c12</code></td><td>i18n, new shell, Doctor Portal v1, Report Audit, assistant, redesigned tabs, docs</td></tr>
+  <tr><td>Uncommitted</td><td>Auth redesign, Doctor Portal rewrite, care sync (frontend and backend), Device 3D Explorer, <code>session.js</code>, notification feed, chat widget, symptom logger, API/service updates</td></tr>
+</table>
+<div class="note">Recommended next steps: commit the uncommitted work in separate commits (care-sync, 3D explorer, auth redesign) and mirror the new <code>en.json</code> keys into hi/kn/ta/te.</div>
+</main>
+</body>
+</html>

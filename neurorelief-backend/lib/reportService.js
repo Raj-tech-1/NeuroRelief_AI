@@ -349,6 +349,20 @@ export function reportActivity(ctx, patientId, reportId) {
 // =====================================================================
 // Doctor
 // =====================================================================
+// A share stays reviewable while its appointment is accepted, and for REVIEW_GRACE_DAYS after the doctor marks the
+// consultation completed (status 'completed' only exists once the clinical-sync migration has added completed_at).
+// Revocation always wins: it is checked before this.
+export const REVIEW_GRACE_DAYS = 30
+function apptAllowsReview(ctx, status, appointmentId) {
+  if (status === 'accepted') return true
+  if (status !== 'completed' || !appointmentId) return false
+  const row = ctx.db.get('SELECT completed_at FROM appointments WHERE appointment_id = ?', [appointmentId])
+  if (!row?.completed_at) return false
+  const ts = String(row.completed_at)
+  const at = Date.parse(ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z')
+  return Number.isFinite(at) && (ctx.now().getTime() - at) <= REVIEW_GRACE_DAYS * 86400000
+}
+
 // Row for a share addressed to this doctor, plus whether content access is currently allowed.
 function doctorAccess(ctx, doctorId, shareId) {
   const s = ctx.db.get(
@@ -359,7 +373,7 @@ function doctorAccess(ctx, doctorId, shareId) {
   if (!s) throw denied(ctx, { id: doctorId, role: 'doctor' }, 'share_not_addressed')
   let reason = null
   if (s.status === 'revoked') reason = 'revoked'
-  else if (s.appt_status !== 'accepted') reason = 'appointment_inactive'
+  else if (!apptAllowsReview(ctx, s.appt_status, s.appointment_id)) reason = 'appointment_inactive'
   return { s, reason }
 }
 const doctorShareView = (s, reason) => ({
@@ -382,14 +396,15 @@ export function doctorInbox(ctx, doctorId, query = {}) {
     status ? [doctorId, status] : [doctorId])
   const needle = (q || '').trim().toLowerCase()
   return rows.filter(r => !needle || r.patient_name.toLowerCase().includes(needle))
-    .map(r => doctorShareView(r, r.status === 'revoked' ? 'revoked' : r.appt_status !== 'accepted' ? 'appointment_inactive' : null))
+    .map(r => doctorShareView(r, r.status === 'revoked' ? 'revoked' : !apptAllowsReview(ctx, r.appt_status, r.appointment_id) ? 'appointment_inactive' : null))
 }
 
 export function doctorInboxSummary(ctx, doctorId) {
   const rows = ctx.db.all(
-    `SELECT s.status, COUNT(*) AS n FROM report_shares s JOIN appointments a ON a.appointment_id = s.appointment_id AND a.status = 'accepted'
-     WHERE s.doctor_user_id = ? AND s.status IN ('submitted','under_review') GROUP BY s.status`, [doctorId])
-  const n = st => rows.find(r => r.status === st)?.n ?? 0
+    `SELECT s.status, a.status AS appt_status, s.appointment_id FROM report_shares s JOIN appointments a ON a.appointment_id = s.appointment_id
+     WHERE s.doctor_user_id = ? AND s.status IN ('submitted','under_review') AND a.status IN ('accepted','completed')`, [doctorId])
+    .filter(r => apptAllowsReview(ctx, r.appt_status, r.appointment_id))
+  const n = st => rows.filter(r => r.status === st).length
   return { submitted: n('submitted'), underReview: n('under_review') }
 }
 

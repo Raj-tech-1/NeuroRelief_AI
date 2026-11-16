@@ -12,6 +12,7 @@
     "symptom": "AI Symptom Advisor",
     "doctor": "Doctor Connect",
     "device": "Device Control",
+    "device3d": "Device 3D Explorer",
     "learn": "Learn",
     "settings": "Settings",
     "logout": "Logout",
@@ -26,6 +27,7 @@
     "symptom": "Get personalized insights, understand your symptoms and find the right care",
     "doctor": "Find women's health specialists and request an appointment",
     "device": "TENS and heat therapy",
+    "device3d": "Interactive 3D view of the prototype hardware (educational demo)",
     "learn": "Guides and resources",
     "audit": "Create health reports and share them with your doctor"
   },
@@ -1460,5 +1462,55 @@
     "noticeNote": "Note saved. The patient can see it.",
     "noticeChanges": "Changes requested. The patient can now see your note.",
     "noticeVerified": "Report marked as verified."
+  },
+  "login": {
+    "tagline": "Menstrual Wellness, Powered by AI",
+    "heroA": "A Healthier You,",
+    "heroB": "Every Cycle",
+    "heroSub": "Track. Understand. Manage. Feel Better.",
+    "f1": {
+      "title": "Cycle Tracking",
+      "desc": "Understand your menstrual health with AI insights"
+    },
+    "f2": {
+      "title": "Personalized Care",
+      "desc": "Guidance tailored to your unique needs"
+    },
+    "f3": {
+      "title": "Expert Support",
+      "desc": "Connect with qualified doctors and specialists"
+    },
+    "f4": {
+      "title": "Your Data, Your Control",
+      "desc": "Secure, private and always in your hands"
+    },
+    "quote1": "Supporting your hormonal health for a brighter, more balanced you.",
+    "quote2": "Know your cycle, ease your pain, and feel like yourself again.",
+    "quote3": "Small daily check-ins add up to real insight about your body.",
+    "quoteNav": "Show quote {{n}}",
+    "title": "Login to your account",
+    "sub": "Access your personalized wellness platform",
+    "createTitle": "Create your account",
+    "createSub": "Start your personalized wellness journey",
+    "doctorTitle": "Doctor Portal login",
+    "doctorSub": "Sign in with the doctor account provided by your clinic",
+    "roleLabel": "Sign in as",
+    "patient": "Patient",
+    "doctor": "Doctor",
+    "remember": "Remember me",
+    "rememberHint": "Keeps you signed in when you open new tabs on this device",
+    "forgot": "Forgot password?",
+    "forgotInfo": "Online password reset is not available yet. Please contact NeuroRelief support or your clinic administrator to reset your password.",
+    "login": "Login",
+    "create": "Create account",
+    "or": "OR",
+    "google": "Continue with Google",
+    "googleInfo": "Google sign-in is not set up yet. Please log in with your email and password.",
+    "noAccount": "Don't have an account?",
+    "signUp": "Sign up",
+    "haveAccount": "Already have an account?",
+    "logIn": "Log in",
+    "doctorNoSignup": "Doctor accounts are created by the clinic.",
+    "switching": "This tab is signed in as {{name}}. Signing in here switches only this tab to the doctor account."
   }
 }

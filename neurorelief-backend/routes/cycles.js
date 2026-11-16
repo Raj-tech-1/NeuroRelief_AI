@@ -1,9 +1,10 @@
 import { Router } from 'express'
 import { all, get, run } from '../db/database.js'
-import { authenticateToken } from '../middleware/auth.js'
+import { authenticateToken, requireRole } from '../middleware/auth.js'
 
 const router = Router()
 router.use(authenticateToken)
+router.use(requireRole('user'))   // patient-only: a patient's own records
 
 router.get('/', (req, res) => {
   const cycles = all('SELECT * FROM menstrual_cycles WHERE user_id = ? ORDER BY start_date DESC', [req.userId])

@@ -3,7 +3,7 @@ import { execSync } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { run, all } from '../db/database.js'
-import { authenticateToken } from '../middleware/auth.js'
+import { authenticateToken, requireRole } from '../middleware/auth.js'
 import fs from 'fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -61,6 +61,7 @@ function scoreToLabel(v) {
 
 const router = Router()
 router.use(authenticateToken)
+router.use(requireRole('user'))   // patient-only: a patient's own records
 
 router.post('/', (req, res) => {
   const {

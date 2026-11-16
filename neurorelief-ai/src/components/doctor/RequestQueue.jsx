@@ -21,7 +21,7 @@ function Empty({ title, hint, action }) {
 
 // Search, status filter, sort and pagination over the doctor's own requests. All filtering is
 // client-side on data already returned by GET /doctors/requests; Accept/Decline use the existing PATCH.
-export default function RequestQueue({ list, filter, setFilter, busyId, onDecide, focusId }) {
+export default function RequestQueue({ list, filter, setFilter, busyId, onDecide, focusId, onOpen }) {
   const { t } = useTranslation()
   const fmt = useFormat()
   const [search, setSearch] = useState('')
@@ -76,9 +76,9 @@ export default function RequestQueue({ list, filter, setFilter, busyId, onDecide
           <label htmlFor="queue-search" className="sr-only">{t('dd.searchLabel')}</label>
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"><Icon name="search" size={16} /></span>
           <input id="queue-search" type="search" value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} placeholder={t('dd.searchPh')} autoComplete="off"
-            className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100" />
+            className="w-full pl-9 pr-9 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100" />
           {search && (
-            <button onClick={() => { setSearch(''); setPage(0) }} aria-label={t('dd.searchClear')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400">
+            <button onClick={() => { setSearch(''); setPage(0) }} aria-label={t('dd.searchClear')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
               <Icon name="close" size={14} />
             </button>
           )}
@@ -86,7 +86,7 @@ export default function RequestQueue({ list, filter, setFilter, busyId, onDecide
         <div className="flex items-center gap-2 shrink-0">
           <label htmlFor="queue-sort" className="text-xs font-semibold text-slate-600">{t('dd.sortLabel')}</label>
           <select id="queue-sort" value={sort} onChange={e => { setSort(e.target.value); setPage(0) }}
-            className="text-sm rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 focus:outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100 max-w-[14rem]">
+            className="text-sm rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100 max-w-[14rem]">
             <option value="soonest">{t('dd.sortSoonest')}</option>
             <option value="latest">{t('dd.sortLatest')}</option>
             <option value="newest">{t('dd.sortNewest')}</option>
@@ -98,8 +98,8 @@ export default function RequestQueue({ list, filter, setFilter, busyId, onDecide
       <div className="flex flex-wrap gap-2 mb-4" role="group" aria-label={t('dd.filterAria')}>
         {FILTERS.map(f => (
           <button key={f} onClick={() => { setFilter(f); setPage(0) }} aria-pressed={filter === f}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-100 ${
-              filter === f ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'}`}>
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 ${
+              filter === f ? 'bg-brand-600 text-white border-brand-600' : 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'}`}>
             {t(`dd.filter${f[0].toUpperCase() + f.slice(1)}`)}
             <span className={`px-1.5 rounded-full text-[11px] ${filter === f ? 'bg-white/25' : 'bg-slate-100 text-slate-600'}`}>{fmt.number(counts[f])}</span>
           </button>
@@ -110,22 +110,22 @@ export default function RequestQueue({ list, filter, setFilter, busyId, onDecide
         list.length === 0
           ? <Empty title={t('dd.none')} hint={t('dd.noneHint')} />
           : <Empty title={t('dd.noMatch')} hint={t('dd.noMatchHint')}
-              action={filtersActive && <button onClick={clear} className="mt-3 px-4 py-1.5 rounded-lg border border-teal-300 text-teal-700 text-sm font-semibold hover:bg-teal-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-100">{t('dd.clearFilters')}</button>} />
+              action={filtersActive && <button onClick={clear} className="mt-3 px-4 py-1.5 rounded-lg border border-brand-300 text-brand-700 text-sm font-semibold hover:bg-brand-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-100">{t('dd.clearFilters')}</button>} />
       ) : (
         <>
           <div className={`hidden md:grid ${TABLE_COLS} gap-4 px-3.5 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500`} aria-hidden="true">
             <span>{t('dd.colPatient')}</span><span>{t('dd.colWhen')}</span><span>{t('dd.colStatus')}</span><span className="text-right">{t('dd.colActions')}</span>
           </div>
           <ul className="space-y-2">
-            {visible.map(r => <RequestRow key={r.appointment_id} r={r} variant="table" highlighted={focusId === r.appointment_id} busyId={busyId} onDecide={onDecide} />)}
+            {visible.map(r => <RequestRow key={r.appointment_id} r={r} variant="table" highlighted={focusId === r.appointment_id} busyId={busyId} onDecide={onDecide} onOpen={onOpen} />)}
           </ul>
           <nav className="flex flex-wrap items-center justify-between gap-3 mt-4 text-sm text-slate-600" aria-label={t('dd.pagerLabel')}>
             <p>{t('dd.showing', { from: fmt.number(from), to: fmt.number(to), total: fmt.number(rows.length) })}</p>
             {pages > 1 && (
               <div className="flex items-center gap-2">
-                <button onClick={() => setPage(safePage - 1)} disabled={safePage === 0} className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium hover:bg-slate-50 disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-100">{t('dd.prev')}</button>
+                <button onClick={() => setPage(safePage - 1)} disabled={safePage === 0} className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium hover:bg-slate-50 disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-100">{t('dd.prev')}</button>
                 <span aria-live="polite">{t('dd.pageOf', { page: fmt.number(safePage + 1), pages: fmt.number(pages) })}</span>
-                <button onClick={() => setPage(safePage + 1)} disabled={safePage >= pages - 1} className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium hover:bg-slate-50 disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-100">{t('dd.next')}</button>
+                <button onClick={() => setPage(safePage + 1)} disabled={safePage >= pages - 1} className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium hover:bg-slate-50 disabled:opacity-40 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-100">{t('dd.next')}</button>
               </div>
             )}
           </nav>

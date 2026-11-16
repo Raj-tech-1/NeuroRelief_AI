@@ -4,13 +4,13 @@
  * Future: change to your deployed backend URL
  */
 
-const BASE_URL = 'http://localhost:8000/api'
+// VITE_API_URL lets a test build point at another backend; unset = the usual local backend
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
-function getToken() {
-  const user = localStorage.getItem('neurorelief_user')
-  if (!user) return null
-  try { return JSON.parse(user).token } catch { return null }
-}
+import { getSessionToken } from './session'
+
+// The token of the account THIS tab is signed in as (see services/session.js)
+const getToken = getSessionToken
 
 function headers(withAuth = true) {
   const h = { 'Content-Type': 'application/json' }
@@ -383,3 +383,52 @@ async function assistantRequest(method, path, body) {
 }
 export const getAssistantStatus = () => assistantRequest('GET', '/status')
 export const sendAssistantMessage = (message, history, lang) => assistantRequest('POST', '/chat', { message, history, lang })
+
+// ─── Care sync (/api/care): appointments, notes, messages, record consent, symptoms, therapy sessions ───
+// Every rule (who may see what) is enforced by the backend. Errors carry .status and .code like reportRequest.
+async function careRequest(method, path, body) {
+  let res
+  try {
+    res = await fetch(`${BASE_URL}/care${path}`, { method, headers: headers(), body: body ? JSON.stringify(body) : undefined })
+  } catch {
+    const err = new Error('Could not reach the server. Please check your connection and try again.'); err.code = 'network'; throw err
+  }
+  let data = null
+  try { data = await res.json() } catch { /* non-JSON body */ }
+  if (!res.ok) {
+    const err = new Error(data?.error || `Request failed (${res.status})`)
+    err.status = res.status; err.code = data?.code || null
+    throw err
+  }
+  return data
+}
+export const getCareStatus = () => careRequest('GET', '/status')
+export const getCareActivity = since => careRequest('GET', `/activity${since ? `?since=${encodeURIComponent(since)}` : ''}`)
+export const getConversations = () => careRequest('GET', '/conversations')
+export const getCareAppointment = id => careRequest('GET', `/appointments/${id}`)
+export const getMessages = id => careRequest('GET', `/appointments/${id}/messages`)
+export const sendMessage = (id, text) => careRequest('POST', `/appointments/${id}/messages`, { text })
+// patient
+export const rescheduleAppointment = (id, body) => careRequest('POST', `/appointments/${id}/reschedule`, body)
+export const respondToProposal = (id, accept, version) => careRequest('POST', `/appointments/${id}/proposal`, { accept, version })
+export const getPatientNotes = id => careRequest('GET', `/appointments/${id}/notes`)
+export const getMyFollowUps = () => careRequest('GET', '/follow-ups')
+export const getRecordConsent = () => careRequest('GET', '/consent')
+export const getMyGrants = () => careRequest('GET', '/grants')
+export const createGrant = body => careRequest('POST', '/grants', body)
+export const revokeGrant = id => careRequest('POST', `/grants/${id}/revoke`)
+export const getMySymptoms = () => careRequest('GET', '/symptoms')
+export const addSymptom = body => careRequest('POST', '/symptoms', body)
+export const getTherapySessions = () => careRequest('GET', '/therapy-sessions')
+export const saveTherapySession = body => careRequest('POST', '/therapy-sessions', body)
+// doctor
+export const getDoctorDashboard = () => careRequest('GET', '/doctor/dashboard')
+export const proposeTime = (id, body) => careRequest('POST', `/doctor/appointments/${id}/propose`, body)
+export const completeAppointment = (id, version) => careRequest('POST', `/doctor/appointments/${id}/complete`, { version })
+export const doctorCancelAppointment = (id, version) => careRequest('POST', `/doctor/appointments/${id}/cancel`, { version })
+export const addConsultationNote = (id, body) => careRequest('POST', `/doctor/appointments/${id}/notes`, body)
+export const getDoctorNotes = (query = {}) => careRequest('GET', `/doctor/notes${Object.keys(query).length ? '?' + new URLSearchParams(query) : ''}`)
+export const updateNote = (id, body) => careRequest('PATCH', `/doctor/notes/${id}`, body)
+export const getDoctorFollowUps = () => careRequest('GET', '/doctor/follow-ups')
+export const getDoctorPatients = () => careRequest('GET', '/doctor/patients')
+export const getPatientRecords = (patientId, category) => careRequest('GET', `/doctor/patients/${patientId}/records?category=${encodeURIComponent(category)}`)

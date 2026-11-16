@@ -46,7 +46,7 @@ export default function ReportVerification({ doctorName, onSummary }) {
   const needle = q.trim().toLowerCase()
   const shown = items.filter(r => (filter === 'all' || r.status === filter) && (!needle || r.patientName.toLowerCase().includes(needle)))
 
-  if (phase === 'loading') return <p className="flex items-center justify-center gap-3 py-16 text-teal-700 text-sm" role="status"><span className="w-5 h-5 rounded-full border-2 border-teal-200 border-t-teal-600 animate-spin" aria-hidden="true" />{t('common.loading')}</p>
+  if (phase === 'loading') return <p className="flex items-center justify-center gap-3 py-16 text-brand-700 text-sm" role="status"><span className="w-5 h-5 rounded-full border-2 border-brand-200 border-t-brand-600 animate-spin" aria-hidden="true" />{t('common.loading')}</p>
   if (phase === 'unavailable') {
     return (
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 max-w-2xl" aria-labelledby="rv-na">
@@ -60,7 +60,7 @@ export default function ReportVerification({ doctorName, onSummary }) {
     return (
       <div role="alert" className="bg-rose-50 border border-rose-200 rounded-2xl p-6 text-center">
         <p className="text-rose-800 font-semibold">{t(error)}</p>
-        <button type="button" onClick={load} className="mt-3 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-200">{t('common.tryAgain')}</button>
+        <button type="button" onClick={load} className="mt-3 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-semibold focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">{t('common.tryAgain')}</button>
       </div>
     )
   }

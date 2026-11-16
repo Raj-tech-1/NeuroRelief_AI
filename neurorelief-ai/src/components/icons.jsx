@@ -53,6 +53,7 @@ const paths = {
   upload: <path d="M12 16V5M7 10l5-5 5 5M5 20h14" />,
   eye: <><path d="M2 12s3.500-7 10-7 10 7 10 7-3.500 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
   globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3.500 3 3.500 15 0 18M12 3c-3.500 3-3.500 15 0 18" /></>,
+  cube: <><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" /><path d="M4 7.5l8 4.5 8-4.5M12 12v9" /></>,
 }
 
 export function Icon({ name, size = 22, className = '' }) {

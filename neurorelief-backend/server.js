@@ -8,6 +8,8 @@ import { createFileStore } from './lib/reportFiles.js'
 import path from 'node:path'
 import os from 'node:os'
 import { loadMasterKey, reportKeyStatus } from './lib/reportCrypto.js'
+import { createCareRouter } from './routes/care.js'
+import * as reportSvc from './lib/reportService.js'
 
 // Import routes
 import authRoutes from './routes/auth.js'
@@ -52,6 +54,16 @@ app.use('/api/reports', createReportsRouter({
   },
 }))
 
+// Patient <-> doctor synchronisation: inert (generic 503) until the clinical-sync schema has been applied
+// (scripts/migrate-clinical.js). Notes and messages are encrypted with the same key as Report Audit.
+const reportCtx = { db: { all, get, run, transaction }, key: () => (reportKey ??= loadMasterKey()), now: () => new Date(), files: reportFiles }
+app.use('/api/care', createCareRouter({
+  authenticate: authenticateToken,
+  ctx: { db: { all, get, run, transaction }, key: () => (reportKey ??= loadMasterKey()), now: () => new Date() },
+  // Reports awaiting review for the doctor dashboard, only when Report Audit itself is enabled
+  reportSummary: doctorId => (reportSvc.featureStatus(reportCtx).enabled ? reportSvc.doctorInboxSummary(reportCtx, doctorId) : null),
+}))
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
@@ -62,7 +74,7 @@ initDB().then(() => {
   app.listen(PORT, () => {
     console.log(`
   NeuroRelief AI Backend running on http://localhost:${PORT}
-  Endpoints: /api/auth /api/cycles /api/mood /api/predict /api/doctors /api/scans
+  Endpoints: /api/auth /api/cycles /api/mood /api/predict /api/doctors /api/scans /api/reports /api/care
   Report Audit key: ${reportKeyStatus()}
     `)
   })

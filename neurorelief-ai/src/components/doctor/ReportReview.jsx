@@ -96,7 +96,7 @@ export default function ReportReview({ shareId, doctorName, onBack, onUnavailabl
           <section className={card} aria-labelledby="rv-review">
             <h2 id="rv-review" className="font-bold text-slate-900 mb-3">{t('reportVerify.reviewTitle')}</h2>
             <div aria-live="polite">
-              {msg && <p role={msg.ok ? 'status' : 'alert'} data-msg={msg.ok ? 'ok' : 'err'} className={`mb-3 text-sm rounded-xl px-3.5 py-2.5 border ${msg.ok ? 'bg-teal-50 border-teal-200 text-teal-900' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>{t(msg.key)}</p>}
+              {msg && <p role={msg.ok ? 'status' : 'alert'} data-msg={msg.ok ? 'ok' : 'err'} className={`mb-3 text-sm rounded-xl px-3.5 py-2.5 border ${msg.ok ? 'bg-brand-50 border-brand-200 text-brand-900' : 'bg-rose-50 border-rose-200 text-rose-800'}`}>{t(msg.key)}</p>}
             </div>
 
             <h3 className="text-sm font-semibold text-slate-800">{t('reportVerify.notesTitle')}</h3>

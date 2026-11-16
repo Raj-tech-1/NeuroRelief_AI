@@ -6,7 +6,9 @@ import { initials } from './helpers'
 // Status is conveyed by text + icon + colour (never colour alone). Values are the canonical backend statuses.
 const STATUS = {
   pending: { icon: 'clock', cls: 'bg-amber-50 text-amber-800 border-amber-200' },
-  accepted: { icon: 'check', cls: 'bg-teal-50 text-teal-800 border-teal-200' },
+  accepted: { icon: 'check', cls: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+  completed: { icon: 'check', cls: 'bg-sky-50 text-sky-800 border-sky-200' },
+  cancelled_by_doctor: { icon: 'ban', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
   declined: { icon: 'close', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
   cancelled: { icon: 'ban', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
 }
@@ -17,7 +19,7 @@ export function StatusChip({ status }) {
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${s.cls}`}>
       <Icon name={s.icon} size={13} />
-      <span>{t(status === 'cancelled' ? 'apptStatus.cancelledByPatient' : `apptStatus.${status}`, { defaultValue: status })}</span>
+      <span>{t(status === 'cancelled' ? 'apptStatus.cancelledByPatient' : `apptStatus.${status}`, { defaultValue: { completed: 'Completed', cancelled_by_doctor: 'Cancelled by doctor' }[status] || status })}</span>
     </span>
   )
 }
@@ -26,7 +28,7 @@ export const TABLE_COLS = 'md:grid-cols-[minmax(0,2.2fr)_minmax(0,1.8fr)_minmax(
 
 // variant 'table': one aligned row of a wide queue (collapses to a card below md)
 // variant 'card':  stacked card for narrow panels
-export default function RequestRow({ r, busyId, highlighted, onDecide, variant = 'card' }) {
+export default function RequestRow({ r, busyId, highlighted, onDecide, onOpen, variant = 'card' }) {
   const { t } = useTranslation()
   const fmt = useFormat()
   const busy = busyId === r.appointment_id
@@ -37,7 +39,7 @@ export default function RequestRow({ r, busyId, highlighted, onDecide, variant =
   const actions = r.status === 'pending' ? (
     <div className="flex flex-wrap items-center gap-2 md:justify-end">
       <button onClick={() => onDecide(r.appointment_id, 'accepted')} disabled={busy}
-        className="px-3.5 py-1.5 bg-teal-600 text-white text-sm rounded-lg font-semibold hover:bg-teal-700 disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-teal-200">
+        className="px-3.5 py-1.5 bg-brand-600 text-white text-sm rounded-lg font-semibold hover:bg-brand-700 disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">
         {busy ? t('dd.saving') : t('dd.accept')}
       </button>
       <button onClick={() => onDecide(r.appointment_id, 'declined')} disabled={busy}
@@ -50,7 +52,7 @@ export default function RequestRow({ r, busyId, highlighted, onDecide, variant =
   return (
     <li id={`req-${r.appointment_id}`}
       className={`rounded-xl border p-3.5 transition ${table ? `md:grid ${TABLE_COLS} md:items-center md:gap-4` : ''} flex flex-wrap items-center gap-x-3 gap-y-2 ${
-        highlighted ? 'border-teal-400 ring-4 ring-teal-200/70 bg-teal-50/60' : 'border-slate-200 bg-white hover:border-slate-300'
+        highlighted ? 'border-brand-400 ring-4 ring-brand-200/70 bg-brand-50/60' : 'border-slate-200 bg-white hover:border-slate-300'
       }`}>
       <div className={`flex items-center gap-3 min-w-0 ${table ? '' : 'flex-1 basis-48'}`}>
         <span aria-hidden="true" className="shrink-0 w-10 h-10 rounded-full bg-brand-50 text-brand-700 font-bold text-sm flex items-center justify-center">{initials(r.patient_name)}</span>
@@ -67,7 +69,7 @@ export default function RequestRow({ r, busyId, highlighted, onDecide, variant =
           <span className="font-medium">{day}</span><span className="text-slate-500"> · {time}</span>
         </p>
       )}
-      <div><StatusChip status={r.status} /></div>
+      <div className="flex items-center gap-2"><StatusChip status={r.status} />{onOpen && <button onClick={() => onOpen(r.appointment_id)} className="text-xs font-semibold text-brand-700 hover:underline">Open</button>}</div>
       {actions ? <div className={table ? '' : 'w-full'}>{actions}</div> : (table ? <div /> : null)}
     </li>
   )

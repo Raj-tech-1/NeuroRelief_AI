@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import Spinner from '../components/Spinner'
+import { patchSession } from '../services/session'
 
 export default function ProfilePage({ onClose }) {
   const { user } = useAuth()
@@ -41,10 +42,8 @@ export default function ProfilePage({ onClose }) {
     const profile = { name, age, height, weight, bmi }
     localStorage.setItem('neurorelief_profile', JSON.stringify(profile))
 
-    // Update user in localStorage too
-    const savedUser = JSON.parse(localStorage.getItem('neurorelief_user') || '{}')
-    savedUser.name = name
-    localStorage.setItem('neurorelief_user', JSON.stringify(savedUser))
+    // Update the signed-in user's display name (this tab's session; the shared copy only if it is the same account)
+    patchSession({ name })
 
     setSaveMsg(true)
     setSaving(false)

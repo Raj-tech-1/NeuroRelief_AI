@@ -5,11 +5,10 @@
 
 const BASE_URL = 'http://localhost:8000/api'
 
-function getToken() {
-  const user = localStorage.getItem('neurorelief_user')
-  if (!user) return null
-  try { return JSON.parse(user).token } catch { return null }
-}
+import { getSessionToken } from './session'
+
+// The token of the account THIS tab is signed in as (see services/session.js)
+const getToken = getSessionToken
 
 export async function getPainPrediction(userFeatures) {
   const token = getToken()

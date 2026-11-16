@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { loginUser, registerUser } from '../services/api'
+import { readSession, writeSession, clearSession, onSessionLogout } from '../services/session'
 
 const AuthContext = createContext(null)
 
@@ -8,36 +9,35 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing session
-    const saved = localStorage.getItem('neurorelief_user')
-    if (saved) {
-      try { setUser(JSON.parse(saved)) } catch { localStorage.removeItem('neurorelief_user') }
-    }
+    // This tab's session (each tab keeps the account it signed in with; see services/session.js)
+    setUser(readSession())
     setLoading(false)
+    // Another tab logged this account out: sign this tab out too
+    return onSessionLogout(() => setUser(null))
   }, [])
 
   // expectedRole (optional): used by the Doctor Portal. A valid account with a different role is
   // refused BEFORE any session is stored. This is a UX check only; the backend enforces roles.
-  async function login(email, password, expectedRole) {
+  async function login(email, password, expectedRole, opts) {
     const userData = await loginUser(email, password)
     if (expectedRole && userData.role !== expectedRole) {
       throw new Error('This account is not a doctor account. Please use the patient sign in.')
     }
     setUser(userData)
-    localStorage.setItem('neurorelief_user', JSON.stringify(userData))
+    writeSession(userData, opts)
     return userData
   }
 
-  async function register(email, password) {
+  async function register(email, password, opts) {
     const userData = await registerUser(email, password)
     setUser(userData)
-    localStorage.setItem('neurorelief_user', JSON.stringify(userData))
+    writeSession(userData, opts)
     return userData
   }
 
   function logout() {
+    clearSession()
     setUser(null)
-    localStorage.removeItem('neurorelief_user')
   }
 
   return (
