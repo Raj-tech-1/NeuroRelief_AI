@@ -6,6 +6,7 @@ import EnglishOnly from '../../components/EnglishOnly'
 import VoiceAssistant from '../../components/VoiceAssistant'
 import { getPainPrediction, storePrediction, clearStoredPrediction } from '../../services/predictions'
 import { useAuth } from '../../context/AuthContext'
+import WhyThisScore from '../../components/WhyThisScore'
 import { getCycleData, getMoodData, getPredictionHistory, getArticles } from '../../services/api'
 import { Icon } from '../../components/icons'
 import imgWater from '../../assets/illustrations/tip-water.svg'
@@ -312,6 +313,8 @@ export default function AISymptomAdvisor({ onTabChange, onOpenProfile }) {
                   </p>
                 )}
               </div>
+
+              <WhyThisScore prediction={result.prediction} selectedSymptoms={result.symptoms} hasDescription={!!result.description?.trim()} />
 
               {result.prediction.risk_level === 'high' && (
                 <div className="bg-red-50 border border-red-300 rounded-xl p-3">

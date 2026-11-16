@@ -1537,5 +1537,58 @@
     "switching": "This tab is signed in as {{name}}. Signing in here switches only this tab to the doctor account.",
     "doctorApplyPrompt": "New doctor?",
     "doctorApplyLink": "Apply for verification"
+  },
+  "why": {
+    "title": "Why this score?",
+    "raw": "The model's own result: {{severity}} ({{pct}}% likely).",
+    "adjusted": "Shown as {{severity}} after your personal calibration ({{offset}}, learned from {{n}} feedback sessions).",
+    "notAdjusted": "Not adjusted by personal calibration yet ({{n}} of {{needed}} feedback sessions).",
+    "probabilities": "How likely each level is",
+    "factorsTitle": "What moved this prediction towards {{severity}}",
+    "factorsHint": "Each input compared with a neutral value (no symptom, an average day).",
+    "noFactors": "No single input changed this prediction noticeably.",
+    "toward": "+{{pts}} points towards {{severity}}",
+    "away": "−{{pts}} points, away from {{severity}}",
+    "overallTitle": "What the model relies on overall",
+    "overallNote": "Honest note: the six symptom inputs together count for only {{symptoms}}% of the model's decisions, while cycle phase, mood and cycle day count for {{top}}%. The symptoms you select change the result very little.",
+    "notUsedTitle": "Not used by the model:",
+    "description": "your written description",
+    "method": "Method: each input is swapped for a neutral value and the change in probability is measured. This explains the AI model, not your body, and is not a diagnosis.",
+    "dayN": "day {{n}}",
+    "hours": "{{n}} h",
+    "feature": {
+      "phase_encoded": "Cycle phase",
+      "day_from_last_menses": "Cycle day",
+      "sleep_hours": "Sleep",
+      "stress": "Stress",
+      "fatigue": "Fatigue",
+      "cramps": "Cramps",
+      "headaches": "Headaches",
+      "bloating": "Bloating",
+      "moodswing": "Mood swings",
+      "sleepissue": "Sleep problems",
+      "activity_encoded": "Activity level",
+      "mood_encoded": "Mood",
+      "BMI": "BMI",
+      "age": "Age"
+    },
+    "mood": {
+      "sad": "Low / sad",
+      "Moody": "Moody",
+      "Calm": "Calm",
+      "Energetic": "Energetic"
+    },
+    "activity": {
+      "Low": "Low",
+      "Moderate": "Moderate"
+    },
+    "level": {
+      "0": "Not at all",
+      "1": "Very low",
+      "2": "Low",
+      "3": "Moderate",
+      "4": "High",
+      "5": "Very high"
+    }
   }
 }

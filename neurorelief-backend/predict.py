@@ -66,7 +66,45 @@ def main():
             'High': 'High pain predicted. Prepare TENS and heat therapy.'
         }[severity_label]
     }
+    result['explanation'] = explain(model, features, pred_class, class_names)
     print(json.dumps(result))
+
+
+# Neutral reference value per feature ("no symptom", an average day). Used only to explain a prediction.
+REFERENCE = {
+    'phase_encoded': 1,            # Follicular
+    'day_from_last_menses': 13,
+    'sleep_hours': 7,
+    'stress': 0, 'fatigue': 0, 'cramps': 0, 'headaches': 0, 'bloating': 0, 'moodswing': 0, 'sleepissue': 0,   # "Not at all"
+    'activity_encoded': 1,         # Moderate
+    'mood_encoded': 2,             # Calm
+    'BMI': 22,
+    'age': 25,
+}
+
+
+def explain(model, features, pred_class, class_names):
+    """Per-prediction explanation by perturbation: for each input, swap in its neutral reference value and measure how
+    much the probability of the PREDICTED class changes. effect > 0: this input pushed toward the predicted result;
+    effect < 0: it pulled away. Also returns the model's global feature importances (how much it relies on each input
+    overall). This explains the raw model output, before any personal calibration."""
+    base = float(model.predict_proba(features)[0][pred_class])
+    factors = []
+    for col in features.columns:
+        value = features.iloc[0][col]
+        ref = REFERENCE.get(col)
+        if ref is None or float(value) == float(ref):
+            continue
+        probe = features.copy()
+        probe.loc[probe.index[0], col] = ref
+        effect = base - float(model.predict_proba(probe)[0][pred_class])
+        factors.append({'feature': col, 'value': float(value), 'reference': float(ref), 'effect': round(effect, 3)})
+    factors.sort(key=lambda f: -abs(f['effect']))
+    importances = sorted(
+        ({'feature': c, 'importance': round(float(i), 3)} for c, i in zip(features.columns, model.feature_importances_)),
+        key=lambda f: -f['importance'])
+    return {'method': 'perturbation', 'target': class_names[pred_class], 'probability': round(base, 3),
+            'factors': factors, 'importances': importances}
 
 if __name__ == '__main__':
     main()
