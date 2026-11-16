@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Icon } from '../../components/icons'
 import { useFormat } from '../../i18n/format'
+import PainForecastStrip from '../../components/PainForecastStrip'
 import { getCycleData, getMoodData, getMyBookings, getPredictionHistory, getPastScans, getMe } from '../../services/api'
 
 // Local calendar date (localToday below), so the daily trackers reset at local midnight, not UTC midnight
@@ -264,6 +265,9 @@ export default function Overview({ onTabChange, onOpenProfile, profileVersion = 
           )}
         </section>
       )}
+
+      {/* 7-day pain estimate (only meaningful once a cycle is logged) */}
+      {hasCycle && <PainForecastStrip compact />}
 
       {/* Stat cards */}
       <section className="indic-2col grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label={t('overview.summary')}>

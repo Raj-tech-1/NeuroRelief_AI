@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 import { run, all, get } from '../db/database.js'
 import { authenticateToken, requireRole } from '../middleware/auth.js'
 import { isoDay } from '../lib/appointmentRules.js'
+import { cyclePosition, phaseForDay, modelPhase, DAY_MS } from '../lib/cycleMath.js'
 import fs from 'fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -64,6 +65,31 @@ function pythonCommand() {
   return { file: parts[0], args: parts.slice(1) }
 }
 
+const SCRIPT_PATH = path.join(__dirname, '..', 'predict.py')
+const MODEL_PATH = path.resolve(__dirname, '..', '..', 'neurorelief-ml', 'neurorelief_model.pkl')
+
+// Runs predict.py with { features } (one prediction + explanation) or { rows } (batch). Asynchronous and without a
+// shell, so a slow prediction does not block other requests; one temp file per call (outside the project).
+async function runModel(payload) {
+  if (!fs.existsSync(MODEL_PATH)) throw new Error(`Model not found at ${MODEL_PATH}`)
+  const tempFile = path.join(os.tmpdir(), `neurorelief-predict-${crypto.randomUUID()}.json`)
+  fs.writeFileSync(tempFile, JSON.stringify({ ...payload, model_path: MODEL_PATH }))
+  const { file, args } = pythonCommand()
+  try {
+    const { stdout } = await execFileAsync(file, [...args, SCRIPT_PATH, tempFile], { encoding: 'utf-8', timeout: 30000, windowsHide: true })
+    return JSON.parse(stdout.trim())
+  } finally {
+    fs.promises.unlink(tempFile).catch(() => {})
+  }
+}
+
+// Age and BMI come from the patient's saved profile, never from the request; the model's defaults when missing
+function profileInputs(userId) {
+  const me = get('SELECT age, bmi FROM users WHERE user_id = ?', [userId]) || {}
+  const age = me.age ?? 25, bmi = me.bmi ?? 22
+  return { age, bmi, ageSource: me.age != null ? 'profile' : 'default', bmiSource: me.bmi != null ? 'profile' : 'default' }
+}
+
 const router = Router()
 router.use(authenticateToken)
 router.use(requireRole('user'))   // patient-only: a patient's own records
@@ -75,38 +101,14 @@ router.post('/', async (req, res) => {
     moodswing = 1, sleepissue = 1, activity_level = 'Moderate',
     mood = 'Calm'
   } = req.body
-  // Age and BMI come from the patient's saved profile, never from the request; the model's defaults when missing
-  const me = get('SELECT age, bmi FROM users WHERE user_id = ?', [req.userId]) || {}
-  const age = me.age ?? 25, bmi = me.bmi ?? 22
-  const inputsUsed = { age, bmi, ageSource: me.age != null ? 'profile' : 'default', bmiSource: me.bmi != null ? 'profile' : 'default' }
-
-  const scriptPath = path.join(__dirname, '..', 'predict.py')
-  const modelPath = path.resolve(__dirname, '..', '..', 'neurorelief-ml', 'neurorelief_model.pkl')
-  // One temp file per request (outside the project), so concurrent predictions cannot overwrite each other's input
-  const tempFile = path.join(os.tmpdir(), `neurorelief-predict-${crypto.randomUUID()}.json`)
+  const inputsUsed = profileInputs(req.userId)
+  const { age, bmi } = inputsUsed
 
   try {
-    if (!fs.existsSync(modelPath)) {
-      console.error('Model not found at:', modelPath)
-      return res.status(500).json({ error: 'Prediction failed' })
-    }
-
     const inputData = {
       features: { phase, day_from_last_menses, sleep_hours, stress, fatigue, cramps, headaches, bloating, moodswing, sleepissue, activity_level, mood, bmi, age },
-      model_path: modelPath
     }
-    fs.writeFileSync(tempFile, JSON.stringify(inputData))
-
-    // Runs asynchronously (no shell), so a slow prediction does not block other requests
-    const { file, args } = pythonCommand()
-    let stdout
-    try {
-      ({ stdout } = await execFileAsync(file, [...args, scriptPath, tempFile], { encoding: 'utf-8', timeout: 30000, windowsHide: true }))
-    } finally {
-      fs.promises.unlink(tempFile).catch(() => {})
-    }
-
-    const prediction = JSON.parse(stdout.trim())
+    const prediction = await runModel(inputData)
 
     // ---- always keep the raw model output for honest feedback ----
     prediction.base_severity       = prediction.predicted_severity
@@ -191,6 +193,66 @@ router.post('/feedback', (req, res) => {
 router.get('/calibration', (req, res) => {
   const cal = getCalibration(req.userId)
   res.json({ ...cal, sessions: cal.n, needed: MIN_SESSIONS, maxOffset: MAX_OFFSET })
+})
+
+// GET /api/predict/forecast — 7-day pain ESTIMATE from the AI model. Built entirely on the server from the latest
+// logged cycle (projected phase and cycle day per day) and the last 7 days of check-ins (held constant), plus the
+// saved profile. Future symptoms are unknown, so symptom inputs are 0. Personal calibration is applied like /predict.
+// Nothing is saved and forecasts cannot be given feedback. Not available while the period is late or with no cycle.
+router.get('/forecast', async (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  const latest = get('SELECT start_date, cycle_length FROM menstrual_cycles WHERE user_id = ? ORDER BY start_date DESC LIMIT 1', [req.userId])
+  if (!latest) return res.json({ available: false, reason: 'no_cycle', days: [] })
+  const pos = cyclePosition(latest.start_date, latest.cycle_length || 28)
+  if (pos.daysLate > 0) return res.json({ available: false, reason: 'period_late', daysLate: pos.daysLate, days: [] })
+  if (pos.dayOfCycle < 1) return res.json({ available: false, reason: 'no_cycle', days: [] })
+
+  // Last 7 days of check-ins (same window as /api/mood "recent"), mapped onto the model's scales
+  const cutoff = isoDay(new Date(Date.now() - 7 * DAY_MS))
+  const recs = all('SELECT date, mood, energy, stress, sleep_quality FROM wellness_records WHERE user_id = ? AND date >= ? ORDER BY date DESC', [req.userId, cutoff])
+  const avg = k => { const v = recs.map(r => r[k]).filter(x => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null }
+  const toModel = v => Math.max(0, Math.min(5, Math.round(v / 2)))
+  const stressAvg = avg('stress'), sleepAvg = avg('sleep_quality'), energyAvg = avg('energy')
+  const lastMood = recs.find(r => r.mood)?.mood
+  const common = {
+    sleep_hours: 7,
+    stress: stressAvg != null ? toModel(stressAvg) : 2,
+    sleepissue: sleepAvg != null ? toModel(10 - sleepAvg) : 0,
+    activity_level: (energyAvg ?? 5) >= 6 ? 'Moderate' : 'Low',
+    mood: { Good: 'Energetic', Sad: 'sad', Angry: 'Moody' }[lastMood] || 'Calm',
+    fatigue: 0, cramps: 0, headaches: 0, bloating: 0, moodswing: 0,
+  }
+  const inputsUsed = profileInputs(req.userId)
+
+  const days = []
+  for (let i = 0; i < 7; i++) {
+    let cycleDay = pos.dayOfCycle + i
+    const projected = cycleDay > pos.cycleLength   // past the expected start: assumes the next period starts on time
+    if (projected) cycleDay -= pos.cycleLength
+    const phase = phaseForDay(cycleDay)
+    days.push({ date: isoDay(new Date(pos.today.getTime() + i * DAY_MS + 12 * 3600000)), cycleDay, phase, projected })
+  }
+
+  try {
+    const { results } = await runModel({
+      rows: days.map(d => ({ ...common, phase: modelPhase(d.phase), day_from_last_menses: d.cycleDay, age: inputsUsed.age, bmi: inputsUsed.bmi })),
+    })
+    const cal = getCalibration(req.userId)
+    res.json({
+      available: true,
+      estimate: true,
+      days: days.map((d, i) => {
+        const r = results[i]
+        const score = cal.active ? Math.max(0, Math.min(10, r.severity_score + cal.offset)) : r.severity_score
+        return { ...d, severity: cal.active ? scoreToLabel(score) : r.predicted_severity, baseSeverity: r.predicted_severity, confidence: r.confidence, probabilities: r.probabilities }
+      }),
+      basis: { checkinDays: recs.length, symptomsIncluded: false, ...inputsUsed },
+      calibration: { applied: cal.active, offset: cal.offset, sessions: cal.n, needed: MIN_SESSIONS },
+    })
+  } catch (err) {
+    console.error('Forecast error:', err.message)
+    res.status(500).json({ error: 'Forecast failed' })
+  }
 })
 
 router.get('/history', (req, res) => {

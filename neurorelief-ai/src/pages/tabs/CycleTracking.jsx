@@ -4,7 +4,8 @@ import { useFormat } from '../../i18n/format'
 import EnglishOnly from '../../components/EnglishOnly'
 import { getCycleData, addCycle } from '../../services/api'
 import { downloadCSV } from '../../components/ExportCSV'
-import PainCalendar from '../../components/PainCalendar'
+import CycleCalendar from '../../components/CycleCalendar'
+import PainForecastStrip from '../../components/PainForecastStrip'
 import { Icon } from '../../components/icons'
 
 function getInsightsForPhase(phase) {
@@ -201,7 +202,9 @@ export default function CycleTracking({ onTabChange }) {
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-5">
         <div className="space-y-5 min-w-0">
-          <PainCalendar dayOfCycle={dayOfCycle} cycleLength={lastCycle?.cycleLength || 28} />
+          {/* 7-day pain estimate (AI model), then the month calendar with phase colours only */}
+          <PainForecastStrip reloadKey={cycles.length} />
+          <CycleCalendar dayOfCycle={dayOfCycle} cycleLength={lastCycle?.cycleLength || 28} daysLate={daysLate} />
 
           {/* Cycle tracker: log a cycle, last cycle, history */}
           <section ref={trackerRef} className={`${card} p-5 md:p-6 scroll-mt-24`}>

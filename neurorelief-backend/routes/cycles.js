@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { all, get, run } from '../db/database.js'
 import { authenticateToken, requireRole } from '../middleware/auth.js'
-import { isoDay } from '../lib/appointmentRules.js'
+import { cyclePosition, phaseForDay, DAY_MS } from '../lib/cycleMath.js'
 
 const router = Router()
 router.use(authenticateToken)
@@ -13,23 +13,13 @@ router.get('/', (req, res) => {
   let currentData = null
   if (cycles.length > 0) {
     const latest = cycles[0]
-    // Whole-day arithmetic on calendar dates: both as UTC midnight, with "today" taken from the LOCAL calendar
-    const startDate = new Date(latest.start_date + 'T00:00:00Z')
-    const today = new Date(isoDay(new Date()) + 'T00:00:00Z')
-    const dayOfCycle = Math.round((today - startDate) / 86400000) + 1
-    const cycleLength = latest.cycle_length || 28
+    // Whole-day arithmetic on calendar dates (lib/cycleMath.js), with "today" taken from the LOCAL calendar
+    const { start: startDate, today, dayOfCycle, cycleLength, daysLate } = cyclePosition(latest.start_date, latest.cycle_length || 28)
+    const phase = phaseForDay(dayOfCycle)
 
-    let phase = 'Unknown'
-    if (dayOfCycle <= 5) phase = 'Menstrual'
-    else if (dayOfCycle <= 13) phase = 'Follicular'
-    else if (dayOfCycle <= 16) phase = 'Ovulatory'
-    else phase = 'Luteal'
-
-    const DAY = 86400000
+    const DAY = DAY_MS
     const nextPeriodDate = new Date(startDate.getTime() + cycleLength * DAY)
     const daysUntilPeriod = Math.max(0, Math.ceil((nextPeriodDate - today) / DAY))
-    // Expected start is day (cycleLength + 1); every day after that without a new period logged is "late"
-    const daysLate = Math.max(0, dayOfCycle - cycleLength - 1)
     const iso = d => d.toISOString().split('T')[0]   // dates are UTC midnight, so this is the calendar date
 
     // Fertile window (days 9-15). Once this cycle's window has passed, show the next cycle's projected window;

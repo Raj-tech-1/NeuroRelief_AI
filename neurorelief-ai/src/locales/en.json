@@ -376,8 +376,8 @@
   "calendar": {
     "title": "Pain Prediction Calendar",
     "subtitle": "Estimated pain levels for {{month}}, based on your cycle",
-    "legend": "Pain level legend",
-    "logFirst": "Log your first cycle to see personalised pain estimates. Until then, days are shown without a prediction.",
+    "legend": "Cycle phase legend",
+    "logFirst": "Log your first cycle to see your estimated cycle phases.",
     "prevMonth": "Previous month",
     "nextMonth": "Next month",
     "today": "Today",
@@ -385,10 +385,17 @@
     "estimated": "Estimated pain",
     "painLine": "{{label}} ({{pain}}/10)",
     "prepare": "Consider preparing TENS therapy for this day",
-    "pastDay": "Past day — no prediction shown.",
+    "pastDay": "Past day — phases are shown from today onwards.",
     "logToSee": "Log a cycle to see an estimate for this day.",
     "closeDetails": "Close details",
-    "dayPredicted": "{{date}}, {{label}} predicted pain"
+    "dayPredicted": "{{date}}, {{label}} predicted pain",
+    "phaseTitle": "Cycle Calendar",
+    "phaseSubtitle": "Estimated cycle phases for {{month}}",
+    "dayPhase": "{{date}}, estimated {{phase}} phase",
+    "cycleDayPhaseEst": "Estimated cycle day {{day}} • {{phase}} phase",
+    "lateNote_one": "Your period is {{count}} day late, so future phases can't be estimated. Log it when it starts.",
+    "lateNote_other": "Your period is {{count}} days late, so future phases can't be estimated. Log it when it starts.",
+    "lateDay": "Phases resume once you log your next period."
   },
   "cycle": {
     "loading": "Loading cycle data...",
@@ -1590,5 +1597,20 @@
       "4": "High",
       "5": "Very high"
     }
+  },
+  "forecast": {
+    "title": "7-day pain estimate",
+    "subtitle": "From the AI model, using your cycle and recent check-ins",
+    "estimate": "Estimate",
+    "today": "Today",
+    "error": "The estimate is not available right now.",
+    "noCycle": "Log your cycle to see a 7-day estimate.",
+    "late_one": "Your period is {{count}} day late, so no estimate is shown. Log it when it starts.",
+    "late_other": "Your period is {{count}} days late, so no estimate is shown. Log it when it starts.",
+    "dayLabel": "{{date}}: estimated {{severity}} pain",
+    "detail": "{{date}}: estimated {{severity}} pain ({{pct}}% likely) • cycle day {{day}}, {{phase}} phase.",
+    "projected": "Assumes your next period starts on time.",
+    "basis": "Estimate only, not a diagnosis. Based on your cycle and {{n}} check-ins from the last 7 days; future symptoms are not known, so they are not included.",
+    "calibrated": "Adjusted by your personal calibration."
   }
 }

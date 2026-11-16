@@ -350,6 +350,11 @@ export const getMyBookings = () => doctorRequest('GET', '/bookings')
 export const requestAppointment = body => doctorRequest('POST', '/book', body)
 export const cancelBooking = id => doctorRequest('POST', `/bookings/${id}/cancel`)
 
+// ─── 7-day pain estimate (AI model, built on the server; nothing saved) ───
+export async function getPainForecast() {
+  return okJson(await fetch(`${BASE_URL}/predict/forecast`, { headers: headers() }))
+}
+
 // ─── Prediction history (for the Overview "Latest Pain Prediction") ───
 export async function getPredictionHistory() {
   const res = await fetch(`${BASE_URL}/predict/history`, { headers: headers() })

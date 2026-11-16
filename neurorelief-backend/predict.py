@@ -1,36 +1,18 @@
 """
 Prediction script — reads input from a JSON file passed as argument.
 Usage: python predict.py input_file.json
+  {"features": {...}, "model_path": ...}  -> one prediction with an explanation
+  {"rows": [{...}, ...], "model_path": ...} -> {"results": [...]} (batch, e.g. the 7-day forecast; no explanation)
 """
 import sys
 import json
 import pickle
 import pandas as pd
 
-def main():
-    input_file = sys.argv[1]
-    
-    with open(input_file, 'r') as f:
-        data = json.load(f)
-    
-    input_data = data['features']
-    model_path = data['model_path']
 
-    with open(model_path, 'rb') as f:
-        model_data = pickle.load(f)
-
-    model = model_data['model']
-    phase_map = model_data['phase_map']
-    activity_map = model_data['activity_map']
-    mood_map = model_data['mood_map']
-    class_names = model_data['class_names']
-
-    phase_encoded = phase_map.get(input_data.get('phase', 'Follicular'), 1)
-    activity_encoded = activity_map.get(input_data.get('activity_level', 'Moderate'), 1)
-    mood_encoded = mood_map.get(input_data.get('mood', 'Calm'), 2)
-
-    features = pd.DataFrame([{
-        'phase_encoded': phase_encoded,
+def build_row(input_data, model_data):
+    return {
+        'phase_encoded': model_data['phase_map'].get(input_data.get('phase', 'Follicular'), 1),
         'day_from_last_menses': input_data.get('day_from_last_menses', 14),
         'sleep_hours': input_data.get('sleep_hours', 7),
         'stress': input_data.get('stress', 3),
@@ -40,18 +22,45 @@ def main():
         'bloating': input_data.get('bloating', 1),
         'moodswing': input_data.get('moodswing', 1),
         'sleepissue': input_data.get('sleepissue', 1),
-        'activity_encoded': activity_encoded,
-        'mood_encoded': mood_encoded,
+        'activity_encoded': model_data['activity_map'].get(input_data.get('activity_level', 'Moderate'), 1),
+        'mood_encoded': model_data['mood_map'].get(input_data.get('mood', 'Calm'), 2),
         'BMI': input_data.get('bmi', 22),
         'age': input_data.get('age', 25),
-    }])
+    }
 
+
+def main():
+    input_file = sys.argv[1]
+
+    with open(input_file, 'r') as f:
+        data = json.load(f)
+
+    with open(data['model_path'], 'rb') as f:
+        model_data = pickle.load(f)
+
+    model = model_data['model']
+    class_names = model_data['class_names']
+
+    if 'rows' in data:
+        features = pd.DataFrame([build_row(r, model_data) for r in data['rows']])
+        classes = model.predict(features)
+        probas = model.predict_proba(features)
+        print(json.dumps({'results': [result_for(class_names, c, p) for c, p in zip(classes, probas)]}))
+        return
+
+    features = pd.DataFrame([build_row(data['features'], model_data)])
     pred_class = model.predict(features)[0]
     pred_proba = model.predict_proba(features)[0]
+    result = result_for(class_names, pred_class, pred_proba)
+    result['explanation'] = explain(model, features, pred_class, class_names)
+    print(json.dumps(result))
+
+
+def result_for(class_names, pred_class, pred_proba):
     severity_label = class_names[pred_class]
     severity_score = {'Low': 2, 'Moderate': 5, 'High': 8}[severity_label]
 
-    result = {
+    return {
         'predicted_severity': severity_label,
         'severity_score': severity_score,
         'confidence': round(float(max(pred_proba)), 2),
@@ -66,8 +75,6 @@ def main():
             'High': 'High pain predicted. Prepare TENS and heat therapy.'
         }[severity_label]
     }
-    result['explanation'] = explain(model, features, pred_class, class_names)
-    print(json.dumps(result))
 
 
 # Neutral reference value per feature ("no symptom", an average day). Used only to explain a prediction.
