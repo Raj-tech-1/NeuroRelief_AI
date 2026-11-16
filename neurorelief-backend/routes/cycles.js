@@ -25,13 +25,25 @@ router.get('/', (req, res) => {
     else if (dayOfCycle <= 16) phase = 'Ovulatory'
     else phase = 'Luteal'
 
-    const nextPeriodDate = new Date(startDate.getTime() + cycleLength * 86400000)
-    const daysUntilPeriod = Math.max(0, Math.ceil((nextPeriodDate - today) / 86400000))
-    const fertileStart = new Date(startDate.getTime() + 8 * 86400000)
-    const fertileEnd = new Date(startDate.getTime() + 14 * 86400000)
-    const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    const DAY = 86400000
+    const nextPeriodDate = new Date(startDate.getTime() + cycleLength * DAY)
+    const daysUntilPeriod = Math.max(0, Math.ceil((nextPeriodDate - today) / DAY))
+    // Expected start is day (cycleLength + 1); every day after that without a new period logged is "late"
+    const daysLate = Math.max(0, dayOfCycle - cycleLength - 1)
+    const iso = d => d.toISOString().split('T')[0]   // dates are UTC midnight, so this is the calendar date
 
-    currentData = { currentPhase: phase, dayOfCycle, nextPeriod: daysUntilPeriod, fertileWindow: { start: fmt(fertileStart), end: fmt(fertileEnd) }, lastCycle: latest }
+    // Fertile window (days 9-15). Once this cycle's window has passed, show the next cycle's projected window;
+    // while the period is late the next window cannot be estimated, so none is shown (never a past window).
+    let fertileWindow = null
+    const thisStart = new Date(startDate.getTime() + 8 * DAY), thisEnd = new Date(startDate.getTime() + 14 * DAY)
+    if (today <= thisEnd) fertileWindow = { start: iso(thisStart), end: iso(thisEnd), upcoming: today < thisStart }
+    else if (!daysLate) fertileWindow = { start: iso(new Date(thisStart.getTime() + cycleLength * DAY)), end: iso(new Date(thisEnd.getTime() + cycleLength * DAY)), upcoming: true }
+
+    currentData = {
+      currentPhase: phase, dayOfCycle, cycleLength, nextPeriod: daysUntilPeriod,
+      periodLate: daysLate > 0, daysLate,
+      fertileWindow, lastCycle: latest,
+    }
   }
 
   res.json({ cycles, currentData })

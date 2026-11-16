@@ -36,21 +36,35 @@ function IconBadge({ name, tone = 'bg-brand-50 text-brand-600', size = 22 }) {
   return <span className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center ${tone}`}><Icon name={name} size={size} /></span>
 }
 
-function CycleRing({ day, length, phase }) {
+function CycleRing({ day, length, phase, daysLate = 0 }) {
   const { t } = useTranslation()
   const fmt = useFormat()
   const r = 52, c = 2 * Math.PI * r
-  const progress = Math.min(1, Math.max(0, day / Math.max(length, 1)))
+  const late = daysLate > 0
+  // Past the expected start the ring stays full and switches to the "late" state (never "Day 32 of 28")
+  const progress = late ? 1 : Math.min(1, Math.max(0, day / Math.max(length, 1)))
+  const label = late
+    ? t('overview.lateRingLabel', { count: daysLate, length: fmt.number(length) })
+    : t('overview.ringLabel', { day: fmt.number(day), length: fmt.number(length), phase })
   return (
-    <div className="relative w-36 h-36 mx-auto" role="img" aria-label={t('overview.ringLabel', { day: fmt.number(day), length: fmt.number(length), phase })}>
+    <div className="relative w-36 h-36 mx-auto" role="img" aria-label={label}>
       <svg viewBox="0 0 128 128" className="w-full h-full -rotate-90">
-        <circle cx="64" cy="64" r={r} fill="none" stroke="#FDDDE6" strokeWidth="10" />
-        <circle cx="64" cy="64" r={r} fill="none" stroke="#D53F8C" strokeWidth="10" strokeLinecap="round"
+        <circle cx="64" cy="64" r={r} fill="none" stroke={late ? '#FDE9C8' : '#FDDDE6'} strokeWidth="10" />
+        <circle cx="64" cy="64" r={r} fill="none" stroke={late ? '#D97706' : '#D53F8C'} strokeWidth="10" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - progress)} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold text-brand-800">{fmt.number(day)}</span>
-        <span className="text-xs text-gray-500">{t('overview.ofDays', { length: fmt.number(length) })}</span>
+        {late ? (
+          <>
+            <span className="text-3xl font-bold text-amber-700">+{fmt.number(daysLate)}</span>
+            <span className="text-xs text-gray-500">{t('overview.daysLate', { count: daysLate })}</span>
+          </>
+        ) : (
+          <>
+            <span className="text-3xl font-bold text-brand-800">{fmt.number(day)}</span>
+            <span className="text-xs text-gray-500">{t('overview.ofDays', { length: fmt.number(length) })}</span>
+          </>
+        )}
       </div>
     </div>
   )
@@ -204,8 +218,9 @@ export default function Overview({ onTabChange }) {
                 <>
                   <p className="font-bold text-brand-900">{t('overview.dayPhase', { day: fmt.number(cyc.dayOfCycle), phase: tPhase(cyc.currentPhase) })}</p>
                   <p className="text-sm text-gray-500">
-                    {cyc.nextPeriod > 0 ? t('overview.nextPeriod', { count: cyc.nextPeriod }) : t('overview.nextPeriodAny')}
-                    {cyc.fertileWindow?.start && cyc.fertileWindow.start !== '-' ? ` ${t('overview.fertile', { start: cyc.fertileWindow.start, end: cyc.fertileWindow.end })}` : ''}
+                    {cyc.periodLate ? t('overview.lateStatus', { count: cyc.daysLate })
+                      : cyc.nextPeriod > 0 ? t('overview.nextPeriod', { count: cyc.nextPeriod }) : t('overview.nextPeriodAny')}
+                    {cyc.fertileWindow?.start ? ` ${t('overview.fertile', { start: fmt.isoDate(cyc.fertileWindow.start), end: fmt.isoDate(cyc.fertileWindow.end) })}` : ''}
                   </p>
                 </>
               ) : (
@@ -256,7 +271,7 @@ export default function Overview({ onTabChange }) {
           </div>
           {hasCycle ? (
             <div className="flex-1 flex flex-col items-center justify-center py-2">
-              <CycleRing day={cyc.dayOfCycle} length={cycleLength} phase={tPhase(cyc.currentPhase)} />
+              <CycleRing day={cyc.dayOfCycle} length={cycleLength} phase={tPhase(cyc.currentPhase)} daysLate={cyc.daysLate} />
               <p className="font-semibold text-gray-900 mt-3">{t('overview.phaseLabel', { phase: tPhase(cyc.currentPhase) })}</p>
               <p className="text-xs text-gray-500 text-center mt-1 max-w-xs">{t(`phaseDesc.${cyc.currentPhase}`, { defaultValue: cyc.insights?.description })}</p>
             </div>

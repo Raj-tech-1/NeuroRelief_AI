@@ -149,7 +149,13 @@
     "appointmentStatus": "சந்திப்பு {{status}}",
     "doctor": "மருத்துவர்",
     "painPrediction": "வலி கணிப்பு",
-    "severityDetail": "{{severity}} தீவிரம்"
+    "severityDetail": "{{severity}} தீவிரம்",
+    "lateRingLabel_one": "மாதவிடாய் {{count}} நாள் தாமதம் ({{length}}-நாள் சுழற்சி)",
+    "lateRingLabel_other": "மாதவிடாய் {{count}} நாட்கள் தாமதம் ({{length}}-நாள் சுழற்சி)",
+    "daysLate_one": "நாள் தாமதம்",
+    "daysLate_other": "நாட்கள் தாமதம்",
+    "lateStatus_one": "மாதவிடாய் {{count}} நாள் தாமதம். தொடங்கியதும் பதிவு செய்யவும்.",
+    "lateStatus_other": "மாதவிடாய் {{count}} நாட்கள் தாமதம். தொடங்கியதும் பதிவு செய்யவும்."
   },
   "common": {
     "englishOnly": "ஆங்கிலத்தில் மட்டும்",
@@ -438,7 +444,10 @@
         "text": "நிலையான உறக்க நேர வழக்கம் வலியையும் ஹார்மோன் மாற்றங்களையும் உடல் நிர்வகிக்க உதவும்."
       }
     },
-    "lengthLabel": "சுழற்சி நீளம்"
+    "lengthLabel": "சுழற்சி நீளம்",
+    "lateBy_one": "{{count}} நாள் தாமதம்",
+    "lateBy_other": "{{count}} நாட்கள் தாமதம்",
+    "fertileAfterPeriod": "அடுத்த மாதவிடாய்க்குப் பிறகு"
   },
   "mood": {
     "loading": "மனநிலைத் தரவு ஏற்றப்படுகிறது...",

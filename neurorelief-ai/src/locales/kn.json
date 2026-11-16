@@ -149,7 +149,13 @@
     "appointmentStatus": "ಅಪಾಯಿಂಟ್‌ಮೆಂಟ್ {{status}}",
     "doctor": "ವೈದ್ಯರು",
     "painPrediction": "ನೋವಿನ ಮುನ್ನಂದಾಜು",
-    "severityDetail": "{{severity}} ತೀವ್ರತೆ"
+    "severityDetail": "{{severity}} ತೀವ್ರತೆ",
+    "lateRingLabel_one": "ಮುಟ್ಟು {{count}} ದಿನ ತಡವಾಗಿದೆ ({{length}}-ದಿನದ ಚಕ್ರ)",
+    "lateRingLabel_other": "ಮುಟ್ಟು {{count}} ದಿನ ತಡವಾಗಿದೆ ({{length}}-ದಿನದ ಚಕ್ರ)",
+    "daysLate_one": "ದಿನ ತಡ",
+    "daysLate_other": "ದಿನ ತಡ",
+    "lateStatus_one": "ಮುಟ್ಟು {{count}} ದಿನ ತಡವಾಗಿದೆ. ಪ್ರಾರಂಭವಾದಾಗ ದಾಖಲಿಸಿ.",
+    "lateStatus_other": "ಮುಟ್ಟು {{count}} ದಿನ ತಡವಾಗಿದೆ. ಪ್ರಾರಂಭವಾದಾಗ ದಾಖಲಿಸಿ."
   },
   "common": {
     "englishOnly": "ಇಂಗ್ಲಿಷ್‌ನಲ್ಲಿ ಮಾತ್ರ",
@@ -438,7 +444,10 @@
         "text": "ಮಲಗುವ ಸಮಯದ ಸ್ಥಿರ ದಿನಚರಿ ನಿಮ್ಮ ದೇಹಕ್ಕೆ ನೋವು ಮತ್ತು ಹಾರ್ಮೋನ್ ಬದಲಾವಣೆಗಳನ್ನು ನಿರ್ವಹಿಸಲು ಸಹಾಯ ಮಾಡುತ್ತದೆ."
       }
     },
-    "lengthLabel": "ಚಕ್ರದ ಅವಧಿ"
+    "lengthLabel": "ಚಕ್ರದ ಅವಧಿ",
+    "lateBy_one": "{{count}} ದಿನ ತಡ",
+    "lateBy_other": "{{count}} ದಿನ ತಡ",
+    "fertileAfterPeriod": "ಮುಂದಿನ ಮುಟ್ಟಿನ ನಂತರ"
   },
   "mood": {
     "loading": "ಮನಸ್ಥಿತಿಯ ಡೇಟಾ ಲೋಡ್ ಆಗುತ್ತಿದೆ...",

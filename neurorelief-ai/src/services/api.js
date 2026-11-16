@@ -67,7 +67,10 @@ export async function getCycleData(userId) {
       currentPhase: data.currentData.currentPhase,
       dayOfCycle: data.currentData.dayOfCycle,
       nextPeriod: data.currentData.nextPeriod,
-      fertileWindow: data.currentData.fertileWindow,
+      periodLate: !!data.currentData.periodLate,
+      daysLate: data.currentData.daysLate || 0,
+      // ISO dates; null while the period is late (no window can be estimated)
+      fertileWindow: data.currentData.fertileWindow || null,
       lastCycle: {
         startDate: data.currentData.lastCycle?.start_date || '-',
         cycleLength: data.currentData.lastCycle?.cycle_length || 28,

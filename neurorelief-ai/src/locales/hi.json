@@ -149,7 +149,13 @@
     "appointmentStatus": "अपॉइंटमेंट {{status}}",
     "doctor": "डॉक्टर",
     "painPrediction": "दर्द पूर्वानुमान",
-    "severityDetail": "{{severity}} तीव्रता"
+    "severityDetail": "{{severity}} तीव्रता",
+    "lateRingLabel_one": "मासिक धर्म {{count}} दिन देर से ({{length}}-दिन का चक्र)",
+    "lateRingLabel_other": "मासिक धर्म {{count}} दिन देर से ({{length}}-दिन का चक्र)",
+    "daysLate_one": "दिन देर",
+    "daysLate_other": "दिन देर",
+    "lateStatus_one": "मासिक धर्म {{count}} दिन देर से है। शुरू होने पर दर्ज करें।",
+    "lateStatus_other": "मासिक धर्म {{count}} दिन देर से है। शुरू होने पर दर्ज करें।"
   },
   "common": {
     "englishOnly": "केवल अंग्रेज़ी में",
@@ -438,7 +444,10 @@
         "text": "सोने का नियमित समय आपके शरीर को दर्द और हार्मोन के बदलावों को संभालने में मदद करता है।"
       }
     },
-    "lengthLabel": "चक्र की अवधि"
+    "lengthLabel": "चक्र की अवधि",
+    "lateBy_one": "{{count}} दिन देर",
+    "lateBy_other": "{{count}} दिन देर",
+    "fertileAfterPeriod": "अगले मासिक धर्म के बाद"
   },
   "mood": {
     "loading": "मूड का डेटा लोड हो रहा है...",

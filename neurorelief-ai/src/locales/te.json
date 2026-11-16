@@ -149,7 +149,13 @@
     "appointmentStatus": "అపాయింట్‌మెంట్ {{status}}",
     "doctor": "డాక్టర్",
     "painPrediction": "నొప్పి అంచనా",
-    "severityDetail": "{{severity}} తీవ్రత"
+    "severityDetail": "{{severity}} తీవ్రత",
+    "lateRingLabel_one": "నెలసరి {{count}} రోజు ఆలస్యం ({{length}}-రోజుల చక్రం)",
+    "lateRingLabel_other": "నెలసరి {{count}} రోజులు ఆలస్యం ({{length}}-రోజుల చక్రం)",
+    "daysLate_one": "రోజు ఆలస్యం",
+    "daysLate_other": "రోజులు ఆలస్యం",
+    "lateStatus_one": "నెలసరి {{count}} రోజు ఆలస్యం. మొదలైనప్పుడు నమోదు చేయండి.",
+    "lateStatus_other": "నెలసరి {{count}} రోజులు ఆలస్యం. మొదలైనప్పుడు నమోదు చేయండి."
   },
   "common": {
     "englishOnly": "ఇంగ్లీష్‌లో మాత్రమే",
@@ -438,7 +444,10 @@
         "text": "స్థిరమైన నిద్ర దినచర్య నొప్పిని, హార్మోన్ మార్పులను శరీరం నిర్వహించడంలో సహాయపడుతుంది."
       }
     },
-    "lengthLabel": "చక్రం నిడివి"
+    "lengthLabel": "చక్రం నిడివి",
+    "lateBy_one": "{{count}} రోజు ఆలస్యం",
+    "lateBy_other": "{{count}} రోజులు ఆలస్యం",
+    "fertileAfterPeriod": "తదుపరి నెలసరి తర్వాత"
   },
   "mood": {
     "loading": "మానసిక స్థితి డేటా లోడ్ అవుతోంది...",

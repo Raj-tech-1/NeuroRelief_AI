@@ -151,7 +151,13 @@
     "appointmentStatus": "Appointment {{status}}",
     "doctor": "Doctor",
     "painPrediction": "Pain prediction",
-    "severityDetail": "{{severity}} severity"
+    "severityDetail": "{{severity}} severity",
+    "lateRingLabel_one": "Period late by {{count}} day ({{length}}-day cycle)",
+    "lateRingLabel_other": "Period late by {{count}} days ({{length}}-day cycle)",
+    "daysLate_one": "day late",
+    "daysLate_other": "days late",
+    "lateStatus_one": "Period late by {{count}} day. Log it when it starts.",
+    "lateStatus_other": "Period late by {{count}} days. Log it when it starts."
   },
   "common": {
     "englishOnly": "English only",
@@ -440,7 +446,10 @@
         "text": "A steady bedtime routine helps your body manage pain and hormone changes."
       }
     },
-    "lengthLabel": "Cycle length"
+    "lengthLabel": "Cycle length",
+    "lateBy_one": "Late by {{count}} day",
+    "lateBy_other": "Late by {{count}} days",
+    "fertileAfterPeriod": "After your next period"
   },
   "mood": {
     "loading": "Loading mood data...",

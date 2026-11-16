@@ -62,6 +62,7 @@ export default function CycleTracking({ onTabChange }) {
   const [currentPhase, setCurrentPhase] = useState('Unknown')
   const [dayOfCycle, setDayOfCycle] = useState(null)
   const [nextPeriod, setNextPeriod] = useState('-')
+  const [daysLate, setDaysLate] = useState(0)
   const [fertileWindow, setFertileWindow] = useState({ start: '-', end: '-' })
   const [lastCycle, setLastCycle] = useState(null)
   const [cycles, setCycles] = useState([])
@@ -73,6 +74,7 @@ export default function CycleTracking({ onTabChange }) {
       setCurrentPhase(data.currentPhase || 'Unknown')
       setDayOfCycle(data.dayOfCycle || null)
       setNextPeriod(data.nextPeriod ?? '-')
+      setDaysLate(data.daysLate || 0)
       setFertileWindow(data.fertileWindow || { start: '-', end: '-' })
       setLastCycle(data.lastCycle || null)
       setCycles(data.cycles || [])
@@ -139,7 +141,11 @@ export default function CycleTracking({ onTabChange }) {
   const hasCycle = currentPhase !== 'Unknown'
   const hasFertile = hasCycle && fertileWindow?.start && fertileWindow.start !== '-'
   const tPhase = ph => t(`phase.${ph}`, { defaultValue: ph })
-  const nextValue = !hasCycle || nextPeriod === '-' ? t('cycle.daysUnknown') : nextPeriod === 0 ? t('cycle.dueNow') : t('cycle.days', { count: nextPeriod })
+  const nextValue = !hasCycle || nextPeriod === '-' ? t('cycle.daysUnknown')
+    : daysLate > 0 ? t('cycle.lateBy', { count: daysLate })
+    : nextPeriod === 0 ? t('cycle.dueNow') : t('cycle.days', { count: nextPeriod })
+  // While the period is late the next fertile window is unknown (the backend sends none; never a past window)
+  const fertileValue = hasFertile ? `${fmt.isoDate(fertileWindow.start)} – ${fmt.isoDate(fertileWindow.end)}` : daysLate > 0 ? t('cycle.fertileAfterPeriod') : '- - -'
   // insights: shown in the selected language by phase; the API's English text is only a fallback for unknown phases
   const insightText = t(`phaseDesc.${currentPhase}`, { defaultValue: insights.description })
   const recsTr = t(`phaseRecs.${currentPhase}`, { returnObjects: true })
@@ -180,7 +186,7 @@ export default function CycleTracking({ onTabChange }) {
           link={t('cycle.learnPhases')} onLink={() => onTabChange && onTabChange('learn')} />
         <StatCard icon="calendar" tone="bg-blue-50 text-blue-500" label={t('cycle.nextPeriod')} value={nextValue}
           link={hasCycle ? t('cycle.logNew') : t('cycle.logToPredict')} onLink={openForm} />
-        <StatCard compact icon="leaf" tone="bg-pink-50 text-brand-500" label={t('cycle.fertileWindow')} value={hasFertile ? `${fmt.isoDate(fertileWindow.start)} – ${fmt.isoDate(fertileWindow.end)}` : '- - -'}
+        <StatCard compact icon="leaf" tone="bg-pink-50 text-brand-500" label={t('cycle.fertileWindow')} value={fertileValue}
           link={t('cycle.understandFertile')} onLink={() => onTabChange && onTabChange('learn')} />
         <button onClick={() => recsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
           className="rounded-2xl bg-gradient-to-br from-brand-100/80 to-brand-50 border border-brand-100/70 p-5 flex items-center gap-4 text-left hover:shadow-md transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-200">
@@ -195,7 +201,7 @@ export default function CycleTracking({ onTabChange }) {
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-5">
         <div className="space-y-5 min-w-0">
-          <PainCalendar dayOfCycle={dayOfCycle} />
+          <PainCalendar dayOfCycle={dayOfCycle} cycleLength={lastCycle?.cycleLength || 28} />
 
           {/* Cycle tracker: log a cycle, last cycle, history */}
           <section ref={trackerRef} className={`${card} p-5 md:p-6 scroll-mt-24`}>
