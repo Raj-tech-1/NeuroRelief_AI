@@ -237,6 +237,35 @@ async function initDB() {
   `)
   db.run('CREATE INDEX IF NOT EXISTS idx_relief_user ON relief_entries(user_id, occurred_at)')
 
+  // Doctor therapy plans (lib/therapyLimits.js, routes/therapyPlan.js). A plan is never edited: a new plan supersedes
+  // the previous one. Heat limits are hard caps (<= 40 °C, <= 20 min); TENS values are recommendations only.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS therapy_plans (
+      plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      patient_id INTEGER NOT NULL,
+      doctor_user_id INTEGER NOT NULL,
+      appointment_id INTEGER NOT NULL,
+      heat_min_c REAL NOT NULL CHECK (heat_min_c BETWEEN 35 AND 40),
+      heat_max_c REAL NOT NULL CHECK (heat_max_c BETWEEN 35 AND 40 AND heat_max_c >= heat_min_c),
+      heat_max_minutes INTEGER NOT NULL CHECK (heat_max_minutes BETWEEN 1 AND 20),
+      tens_freq_min INTEGER NOT NULL CHECK (tens_freq_min BETWEEN 1 AND 150),
+      tens_freq_max INTEGER NOT NULL CHECK (tens_freq_max BETWEEN 1 AND 150 AND tens_freq_max >= tens_freq_min),
+      sessions_per_day INTEGER CHECK (sessions_per_day IS NULL OR sessions_per_day BETWEEN 1 AND 6),
+      valid_until TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','superseded','revoked')),
+      ciphertext BLOB, iv BLOB, auth_tag BLOB, key_id TEXT,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      ended_at DATETIME,
+      FOREIGN KEY (patient_id) REFERENCES users(user_id),
+      FOREIGN KEY (doctor_user_id) REFERENCES users(user_id)
+    )
+  `)
+  db.run('CREATE INDEX IF NOT EXISTS idx_therapy_plans_patient ON therapy_plans(patient_id, status)')
+  // Plan values are immutable; only status/ended_at may change (to supersede or revoke)
+  db.run(`CREATE TRIGGER IF NOT EXISTS trg_therapy_plans_immutable BEFORE UPDATE OF patient_id, doctor_user_id, appointment_id,
+          heat_min_c, heat_max_c, heat_max_minutes, tens_freq_min, tens_freq_max, sessions_per_day, valid_until, ciphertext, created_at
+          ON therapy_plans BEGIN SELECT RAISE(ABORT, 'therapy plan values are immutable'); END`)
+
   // Migration: users.role (existing accounts default to 'user')
   const userCols = all('PRAGMA table_info(users)').map(c => c.name)
   if (!userCols.includes('role')) {

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useFormat } from '../../i18n/format'
 import { readStoredPrediction } from '../../services/predictions'
 import { Icon } from '../../components/icons'
-import { saveTherapySession } from '../../services/api'
+import { saveTherapySession, getTherapyLimits } from '../../services/api'
 import { getSessionToken } from '../../services/session'
 import { useAuth } from '../../context/AuthContext'
 
@@ -40,6 +40,14 @@ export default function DevicePanel({ onTabChange }) {
     return saved ? JSON.parse(saved) : []
   })
 
+  // Effective therapy limits (doctor's plan or the standard plan). Heat limits are HARD: the slider cannot exceed them
+  // and a session stops automatically at the minute limit; the server rejects anything above them as well.
+  // Until they load, the conservative standard plan is assumed.
+  const [limits, setLimits] = useState({ source: 'standard', heatMinC: 38, heatMaxC: 39, heatMaxMinutes: 20, tensFreqMin: 1, tensFreqMax: 150, sessionsPerDay: null })
+  const [planNote, setPlanNote] = useState(null)
+  const [autoStopped, setAutoStopped] = useState(false)
+  const clampHeat = v => Math.min(limits.heatMaxC, Math.max(limits.heatMinC, v))
+
   // Last AI prediction (for auto-fill)
   const [lastPrediction, setLastPrediction] = useState(null)
   // Server copy of finished sessions (so an authorised doctor can see them); local history above is unchanged
@@ -58,7 +66,21 @@ export default function DevicePanel({ onTabChange }) {
       .then(r => (r.ok ? r.json() : null))
       .then(d => { if (d) setCalibration(d) })
       .catch(() => {})
+
+    // Therapy limits (doctor's plan or standard plan)
+    getTherapyLimits().then(d => { setLimits(d.limits); setPlanNote(d.plan?.note || null) }).catch(() => {})
   }, [user?.user_id])
+
+  // Keep the heat setting inside the limits whenever they change
+  useEffect(() => { setHeatTemp(v => Math.min(limits.heatMaxC, Math.max(limits.heatMinC, v))) }, [limits.heatMinC, limits.heatMaxC])
+
+  // Hard stop: heat cannot run longer than the plan's minutes per session
+  useEffect(() => {
+    if (sessionActive && sessionSeconds >= limits.heatMaxMinutes * 60) {
+      setAutoStopped(true)
+      handleStopSession()
+    }
+  }, [sessionSeconds, sessionActive, limits.heatMaxMinutes])
 
   // Timer logic
   useEffect(() => {
@@ -105,11 +127,13 @@ export default function DevicePanel({ onTabChange }) {
     if (lastPrediction) {
       setTensIntensity(lastPrediction.recommended_tens_intensity || 50)
       setTensFrequency(lastPrediction.recommended_tens_frequency || 50)
-      setHeatTemp(lastPrediction.recommended_heat_temp || 40)
+      setHeatTemp(clampHeat(lastPrediction.recommended_heat_temp || limits.heatMinC))
     }
   }
 
   function handleStartSession() {
+    if (heatTemp > limits.heatMaxC) return   // cannot happen with the bounded slider; a last guard
+    setAutoStopped(false)
     setSessionActive(true)
     setSessionSeconds(0)
     setTensActive(true)
@@ -284,11 +308,19 @@ export default function DevicePanel({ onTabChange }) {
                 <input id="tens-int" type="range" min="0" max="100" value={tensIntensity} onChange={e => setTensIntensity(Number(e.target.value))}
                   className="w-full h-5" style={{ accentColor: '#7C3AED' }} />
                 <div className="flex justify-between text-[11px] text-gray-400"><span>{t('device.off')}</span><span>{t('device.low')}</span><span>{t('device.medium')}</span><span>{t('device.high')}</span><span>{t('device.max')}</span></div>
+                {/* TENS intensity has no numeric limit: guidance only */}
+                <p className="text-[11px] text-purple-800 mt-0.5">{t('device.tensGuidance')}</p>
 
                 <label htmlFor="tens-freq" className="text-sm font-semibold text-gray-800 mt-1.5 block">{t('device.frequency', { n: tensFrequency })}</label>
-                <input id="tens-freq" type="range" min="2" max="150" value={tensFrequency} onChange={e => setTensFrequency(Number(e.target.value))}
-                  className="w-full h-5" style={{ accentColor: '#7C3AED' }} />
-                <div className="flex justify-between text-[11px] text-gray-400"><span>2 Hz</span><span>{t('device.lowEndorphins')}</span><span>150 Hz</span></div>
+                <input id="tens-freq" type="range" min="1" max="150" value={tensFrequency} onChange={e => setTensFrequency(Number(e.target.value))}
+                  aria-describedby="tens-freq-hint" className="w-full h-5" style={{ accentColor: '#7C3AED' }} />
+                <div className="flex justify-between text-[11px] text-gray-400"><span>1 Hz</span><span>{t('device.lowEndorphins')}</span><span>150 Hz</span></div>
+                {/* Recommendation only (warn, never block): outside the plan's range */}
+                <p id="tens-freq-hint" className={`text-[11px] mt-0.5 ${tensFrequency < limits.tensFreqMin || tensFrequency > limits.tensFreqMax ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>
+                  {tensFrequency < limits.tensFreqMin || tensFrequency > limits.tensFreqMax
+                    ? t('device.tensOutside', { min: limits.tensFreqMin, max: limits.tensFreqMax })
+                    : t('device.tensRange', { min: limits.tensFreqMin, max: limits.tensFreqMax })}
+                </p>
               </div>
 
               {/* Heat */}
@@ -300,10 +332,11 @@ export default function DevicePanel({ onTabChange }) {
                   </span>
                 </div>
                 <label htmlFor="heat-temp" className="text-sm font-semibold text-gray-800">{t('device.temperature', { n: heatTemp })}</label>
-                <input id="heat-temp" type="range" min="38" max="42" step="0.5" value={heatTemp} onChange={e => setHeatTemp(Number(e.target.value))}
-                  className="w-full h-5" style={{ accentColor: '#EA580C' }} />
-                <div className="flex justify-between text-[11px] text-gray-400"><span>{t('device.warm')}</span><span>40°C</span><span>{t('device.maxSafe')}</span></div>
-                <p className="mt-auto pt-1.5 text-[11px] text-orange-800/80 bg-orange-100/60 rounded-lg px-2 py-1.5 dev-note">{t('device.heatNote')}</p>
+                {/* Hard limits: the slider cannot go outside the plan (never above 40 °C) */}
+                <input id="heat-temp" type="range" min={limits.heatMinC} max={limits.heatMaxC} step="0.5" value={heatTemp} onChange={e => setHeatTemp(clampHeat(Number(e.target.value)))}
+                  disabled={limits.heatMinC === limits.heatMaxC} className="w-full h-5" style={{ accentColor: '#EA580C' }} />
+                <div className="flex justify-between text-[11px] text-gray-400"><span>{limits.heatMinC}°C</span><span>{t('device.heatMaxLabel', { max: limits.heatMaxC })}</span></div>
+                <p className="mt-auto pt-1.5 text-[11px] text-orange-800/80 bg-orange-100/60 rounded-lg px-2 py-1.5 dev-note">{t('device.heatLimitNote', { max: limits.heatMaxC, min: limits.heatMaxMinutes })}</p>
               </div>
             </section>
 
@@ -355,6 +388,7 @@ export default function DevicePanel({ onTabChange }) {
             </div>
             <span className="text-2xl font-bold font-mono text-brand-800" aria-live="off">{formatTime(sessionSeconds)}</span>
           </div>
+          {autoStopped && <p role="status" className="text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1.5 mb-1.5">{t('device.autoStopped', { minutes: limits.heatMaxMinutes })}</p>}
           {rating ? (
             <div>
               <div className="flex gap-1 justify-center flex-wrap mb-1.5">
@@ -427,6 +461,17 @@ export default function DevicePanel({ onTabChange }) {
               </div>
             </>
           )}
+        </section>
+
+        {/* Therapy limits: doctor's plan or the standard plan */}
+        <section className={`${card} dev-pad px-3 py-2.5 shrink-0`} aria-label={t('device.planTitle')}>
+          <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5"><Icon name="shield" size={15} className="text-brand-600" />
+            {limits.source === 'doctor_plan' ? t('device.planFromDoctor', { doctor: limits.doctorName || t('device.yourDoctor') }) : t('device.planStandard')}
+          </p>
+          <p className="text-xs text-gray-700 mt-1">{t('device.planHeat', { min: limits.heatMinC, max: limits.heatMaxC, minutes: limits.heatMaxMinutes })}{limits.sessionsPerDay ? ` · ${t('device.planSessions', { n: limits.sessionsPerDay })}` : ''}</p>
+          <p className="text-xs text-gray-700">{t('device.planTens', { min: limits.tensFreqMin, max: limits.tensFreqMax })}</p>
+          {planNote && <p className="text-xs text-gray-600 mt-1 italic">“{planNote}”</p>}
+          {limits.validUntil && <p className="text-[11px] text-gray-400 mt-0.5">{t('device.planUntil', { date: fmt.date(limits.validUntil) })}</p>}
         </section>
 
         {/* Personal calibration */}

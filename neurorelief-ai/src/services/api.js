@@ -350,6 +350,13 @@ export const getMyBookings = () => doctorRequest('GET', '/bookings')
 export const requestAppointment = body => doctorRequest('POST', '/book', body)
 export const cancelBooking = id => doctorRequest('POST', `/bookings/${id}/cancel`)
 
+// ─── Therapy plan and safety limits (heat limits are hard caps; TENS is a recommendation) ───
+export const getTherapyLimits = () => jsonRequest('GET', '/therapy-plan')
+export const getDeviceLimits = () => jsonRequest('GET', '/therapy-plan/device-limits')
+export const getDoctorTherapyPlan = patientId => jsonRequest('GET', `/therapy-plan/doctor/${patientId}`)
+export const createTherapyPlan = (patientId, body) => jsonRequest('POST', `/therapy-plan/doctor/${patientId}`, body)
+export const revokeTherapyPlan = patientId => jsonRequest('POST', `/therapy-plan/doctor/${patientId}/revoke`)
+
 // ─── Relief Journal (patient's own; medicine by name and time only, no dose) ───
 export const getJournal = () => jsonRequest('GET', '/journal')
 export const addJournalEntry = body => jsonRequest('POST', '/journal', body)

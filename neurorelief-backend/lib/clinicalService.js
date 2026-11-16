@@ -13,6 +13,7 @@ import { encrypt, decrypt } from './reportCrypto.js'
 import { getRecordConsent, RECORD_CONSENT_VERSION } from './recordConsent.js'
 import { CLINICAL_SCHEMA_OBJECTS, APPOINTMENT_COLUMNS, RECORD_CATEGORIES, GRANT_PURPOSES } from '../db/clinicalSchema.js'
 import { checkSlot, SlotError, isoDay, validDate, TIME_SLOTS, byWhen } from './appointmentRules.js'
+import { effectiveLimits } from './therapyLimits.js'
 
 export class CareError extends Error {
   constructor(status, code, message) { super(message); this.name = 'CareError'; this.status = status; this.code = code }
@@ -627,6 +628,13 @@ export function addTherapySession(ctx, patientId, body) {
     pb: opt(painBefore, 0, 10), pa: opt(painAfter, 0, 10),
   }
   if (kind === 'heat' && (tensIntensity != null || tensFrequency != null)) throw E(400, 'INVALID_INPUT', 'Heat sessions do not carry TENS settings.')
+  // Heat is software-controlled: its limits are HARD caps (plan or standard plan, never above 40 °C / 20 min).
+  // A small grace covers the panel's own auto-stop timing.
+  if (kind === 'heat') {
+    const lim = effectiveLimits(ctx.db, patientId, ctx.now())
+    if (row.heat != null && row.heat > lim.heatMaxC) throw E(400, 'HEAT_LIMIT', `Heat above ${lim.heatMaxC} °C is not allowed.`)
+    if (durationSeconds > lim.heatMaxMinutes * 60 + 15) throw E(400, 'HEAT_LIMIT', `A heat session can last at most ${lim.heatMaxMinutes} minutes.`)
+  }
   if (kind === 'tens' && heatTempC != null) throw E(400, 'INVALID_INPUT', 'TENS sessions do not carry a heat temperature.')
   const ref = clientRef == null ? null : (typeof clientRef === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(clientRef) ? clientRef : (() => { throw E(400, 'INVALID_INPUT', 'Invalid client reference.') })())
   if (ref) {

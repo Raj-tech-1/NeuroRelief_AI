@@ -11,13 +11,14 @@
  * 
  * Device capabilities (from your report):
  *   - TENS: frequency 2-150Hz, pulse width 50-250μs, adjustable intensity
- *   - Heat: PID-controlled, range 38-42°C
+ *   - Heat: PID-controlled, app-limited to 35-40°C (standard plan 38-39°C)
  *   - Sensors: HRV, skin temperature, motion (accelerometer)
  * 
  * Safety constraints:
  *   - Max TENS intensity: 100 (mapped to safe mA range by hardware)
- *   - Max heat: 42°C (hardware-enforced cutoff)
- *   - Auto-shutoff after 30 minutes continuous use
+ *   - Max heat: 40°C and 20 minutes per session (enforced by the app and the backend; the firmware must also
+ *     clamp to its own compiled-in cap: see docs/FIRMWARE_SAFETY_CAP.md and backend lib/therapyLimits.js)
+ *   - Heat auto-shutoff at the plan's minute limit (max 20 minutes per session)
  */
 
 // Connection state

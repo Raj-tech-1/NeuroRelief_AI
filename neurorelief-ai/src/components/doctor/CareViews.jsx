@@ -9,6 +9,7 @@ import {
 } from '../care/shared'
 import { NoteCard } from './AppointmentDrawer'
 import { initials } from './helpers'
+import TherapyPlanCard from './TherapyPlanCard'
 
 // Doctor Portal views for the synchronised features. Every list comes straight from the backend; nothing is invented.
 
@@ -431,6 +432,8 @@ export function InsightsView({ patientId, onPickPatient }) {
           ) : null}
         </Card>
       )}
+      {/* Therapy plan (needs a confirmed appointment; the backend checks) */}
+      {patientId && <TherapyPlanCard patientId={patientId} />}
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { run, all, get } from '../db/database.js'
 import { authenticateToken, requireRole } from '../middleware/auth.js'
 import { isoDay } from '../lib/appointmentRules.js'
 import { cyclePosition, phaseForDay, modelPhase, DAY_MS } from '../lib/cycleMath.js'
+import { effectiveLimits } from '../lib/therapyLimits.js'
 import fs from 'fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -137,6 +138,13 @@ router.post('/', async (req, res) => {
     }
 
     prediction.inputs_used = inputsUsed
+
+    // The recommended heat must respect the patient's limits (doctor's plan or standard plan; never above 40 °C).
+    // The model's own formula can suggest up to 42 °C.
+    const lim = effectiveLimits({ get, all }, req.userId)
+    const rawHeat = prediction.recommended_heat_temp
+    prediction.recommended_heat_temp = Math.min(lim.heatMaxC, Math.max(lim.heatMinC, rawHeat))
+    prediction.limits_applied = { source: lim.source, heatMinC: lim.heatMinC, heatMaxC: lim.heatMaxC, heatMaxMinutes: lim.heatMaxMinutes, clampedFrom: rawHeat !== prediction.recommended_heat_temp ? rawHeat : null }
 
     prediction.calibration = {
       applied:  cal.active,

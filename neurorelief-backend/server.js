@@ -21,6 +21,7 @@ import scanRoutes from './routes/scans.js'
 import assistantRoutes from './routes/assistant.js'
 import adminRoutes from './routes/admin.js'
 import { createJournalRouter } from './routes/journal.js'
+import { createTherapyPlanRouter } from './routes/therapyPlan.js'
 
 const app = express()
 const PORT = process.env.PORT || 8000
@@ -70,6 +71,12 @@ app.use('/api/care', createCareRouter({
 // Relief Journal (patients). Medicine names and notes are encrypted with the same key as Report Audit; without the key,
 // entries can still be saved without those fields.
 app.use('/api/journal', createJournalRouter({
+  authenticate: authenticateToken,
+  ctx: { db: { all, get, run, transaction }, key: () => (reportKey ??= loadMasterKey()), now: () => new Date() },
+}))
+
+// Doctor therapy plans and the effective heat/TENS limits (heat limits are hard caps; see lib/therapyLimits.js)
+app.use('/api/therapy-plan', createTherapyPlanRouter({
   authenticate: authenticateToken,
   ctx: { db: { all, get, run, transaction }, key: () => (reportKey ??= loadMasterKey()), now: () => new Date() },
 }))
