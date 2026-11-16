@@ -57,6 +57,12 @@ export async function registerUser(email, password) {
   return data
 }
 
+// Saves the display name on the account (shown to doctors and across the app). Throws with the server's message.
+export async function updateMyName(name) {
+  const res = await fetch(`${BASE_URL}/auth/me`, { method: 'PATCH', headers: headers(), body: JSON.stringify({ name }) })
+  return okJson(res)
+}
+
 // ─── Cycle Data ──────────────────────────────────────
 export async function getCycleData(userId) {
   const res = await fetch(`${BASE_URL}/cycles`, { headers: headers() })

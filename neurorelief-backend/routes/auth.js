@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { get, run } from '../db/database.js'
-import { generateToken } from '../middleware/auth.js'
+import { generateToken, authenticateToken } from '../middleware/auth.js'
 import { createRateLimiter } from '../middleware/rateLimit.js'
 
 const router = Router()
@@ -52,6 +52,25 @@ router.post('/login', loginLimit, (req, res) => {
 
   const token = generateToken(user.user_id, user.role)
   res.json({ user_id: user.user_id, name: user.name, email: user.email, role: user.role, token })
+})
+
+// A display name: trimmed, control characters removed, inner whitespace collapsed, 1-60 characters
+const MAX_NAME = 60
+const cleanName = v => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim() : '')
+
+// GET /api/auth/me — the signed-in account (name as stored on the server)
+router.get('/me', authenticateToken, (req, res) => {
+  const u = get('SELECT user_id, name, email, role FROM users WHERE user_id = ?', [req.userId])
+  res.json(u)
+})
+
+// PATCH /api/auth/me  { name } — sets the display name shown to doctors and in the app (instead of the email username)
+router.patch('/me', authenticateToken, (req, res) => {
+  const name = cleanName(req.body?.name)
+  if (!name) return res.status(400).json({ error: 'Please enter your name', code: 'NAME_REQUIRED' })
+  if (name.length > MAX_NAME) return res.status(400).json({ error: `Name must be at most ${MAX_NAME} characters`, code: 'NAME_TOO_LONG' })
+  run('UPDATE users SET name = ? WHERE user_id = ?', [name, req.userId])
+  res.json(get('SELECT user_id, name, email, role FROM users WHERE user_id = ?', [req.userId]))
 })
 
 export default router

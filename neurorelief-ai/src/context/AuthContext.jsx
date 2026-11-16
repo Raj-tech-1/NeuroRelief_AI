@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { loginUser, registerUser } from '../services/api'
-import { readSession, writeSession, clearSession, onSessionLogout } from '../services/session'
+import { readSession, writeSession, clearSession, onSessionLogout, patchSession } from '../services/session'
 
 const AuthContext = createContext(null)
 
@@ -40,8 +40,14 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  // Updates fields of the signed-in user (e.g. the display name) in this tab's session AND in the UI right away
+  function updateUser(fields) {
+    const next = patchSession(fields)
+    if (next) setUser(next)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   )

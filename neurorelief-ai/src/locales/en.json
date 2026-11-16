@@ -844,7 +844,9 @@
     "overweight": "Overweight",
     "obese": "Obese",
     "saved": "Profile saved!",
-    "save": "Save Profile"
+    "save": "Save Profile",
+    "nameInvalid": "Please enter your name (up to 60 characters).",
+    "saveFailed": "Could not save your profile. Please try again."
   },
   "auth": {
     "tagline": "Menstrual Wellness, Personalized by AI",

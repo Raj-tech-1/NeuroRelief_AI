@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import Spinner from '../components/Spinner'
-import { patchSession } from '../services/session'
+import { updateMyName } from '../services/api'
 
 export default function ProfilePage({ onClose }) {
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
+  const [saveError, setSaveError] = useState('')   // translation key
   const { t } = useTranslation()
   const [name, setName] = useState(user?.name || '')
   const [age, setAge] = useState('')
@@ -39,18 +40,27 @@ export default function ProfilePage({ onClose }) {
     }
   }, [height, weight])
 
-  function handleSave() {
+  async function handleSave() {
+    if (saving) return
     setSaving(true)
-    // owner_id: the AI advisor only uses age/BMI from a profile saved by the same account
-    const profile = { name, age, height, weight, bmi, owner_id: user?.user_id }
-    localStorage.setItem('neurorelief_profile', JSON.stringify(profile))
+    setSaveError('')
+    try {
+      // The display name is saved on the account, so doctors and every screen show it (not the email username)
+      const saved = await updateMyName(name)
+      updateUser({ name: saved.name })
+      setName(saved.name)
 
-    // Update the signed-in user's display name (this tab's session; the shared copy only if it is the same account)
-    patchSession({ name })
+      // owner_id: the AI advisor only uses age/BMI from a profile saved by the same account
+      const profile = { name: saved.name, age, height, weight, bmi, owner_id: user?.user_id }
+      try { localStorage.setItem('neurorelief_profile', JSON.stringify(profile)) } catch { /* storage unavailable */ }
 
-    setSaveMsg(true)
-    setSaving(false)
-    setTimeout(() => setSaveMsg(false), 2000)
+      setSaveMsg(true)
+      setTimeout(() => setSaveMsg(false), 2000)
+    } catch (err) {
+      setSaveError(err.status === 400 ? 'profile.nameInvalid' : 'profile.saveFailed')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -75,7 +85,7 @@ export default function ProfilePage({ onClose }) {
       <div className="space-y-4">
         <div>
           <label htmlFor="pf-name" className="block text-sm font-medium text-gray-700 mb-1">{t('profile.name')}</label>
-          <input id="pf-name" value={name} onChange={e => setName(e.target.value)}
+          <input id="pf-name" value={name} onChange={e => setName(e.target.value)} maxLength={60} autoComplete="name"
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-brand-400" />
         </div>
 
@@ -110,6 +120,7 @@ export default function ProfilePage({ onClose }) {
         )}
 
         {saveMsg && <p role="status" className="text-sm text-green-600 font-medium text-center">{t('profile.saved')}</p>}
+        {saveError && <p role="alert" className="text-sm text-red-600 font-medium text-center">{t(saveError)}</p>}
 
         <button onClick={handleSave} disabled={saving}
           className="w-full py-2.5 bg-brand-500 text-white rounded-lg font-medium hover:bg-brand-600 disabled:opacity-60">
