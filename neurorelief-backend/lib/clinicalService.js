@@ -496,7 +496,9 @@ export function revokeGrant(ctx, patientId, grantId) {
 // ---------------------------------------------------------------- doctor: patients and permitted records
 export function doctorPatients(ctx, doctorId) {
   const rows = ctx.db.all(
-    `SELECT a.patient_id, u.name AS patient_name, COUNT(*) AS appts,
+    // appts counts real appointments only (requested, confirmed or held); cancelled/declined requests are not counted
+    `SELECT a.patient_id, u.name AS patient_name,
+       SUM(CASE WHEN a.status IN ('pending','accepted','completed') THEN 1 ELSE 0 END) AS appts,
        MIN(a.created_at) AS first_at,
        MAX(CASE WHEN a.status IN ('accepted','completed') THEN a.requested_date END) AS last_confirmed
      FROM appointments a JOIN users u ON u.user_id = a.patient_id
@@ -504,13 +506,19 @@ export function doctorPatients(ctx, doctorId) {
   const grants = ctx.db.all("SELECT * FROM record_access_grants WHERE doctor_user_id = ? AND status = 'active'", [doctorId]).filter(g => grantActive(ctx, g))
   const today = isoDay(ctx.now())
   return rows.map(r => {
-    const next = ctx.db.get(
-      "SELECT requested_date AS date, requested_time AS time, status FROM appointments WHERE doctor_user_id = ? AND patient_id = ? AND status IN ('pending','accepted') AND requested_date >= ? ORDER BY requested_date",
-      [doctorId, r.patient_id, today])
+    // Sorted by date AND slot order in JS: SQL text order would put "10:00 AM" before "9:00 AM"
+    const next = ctx.db.all(
+      "SELECT requested_date AS date, requested_time AS time, status FROM appointments WHERE doctor_user_id = ? AND patient_id = ? AND status IN ('pending','accepted') AND requested_date >= ?",
+      [doctorId, r.patient_id, today]).sort(byWhen)[0]
+    // Most recent confirmed visit before today (or completed), so "no upcoming appointment" still shows context
+    const last = ctx.db.all(
+      "SELECT requested_date AS date, requested_time AS time, status FROM appointments WHERE doctor_user_id = ? AND patient_id = ? AND (status = 'completed' OR (status = 'accepted' AND requested_date < ?))",
+      [doctorId, r.patient_id, today]).sort(byWhen).pop()
     const mine = grants.filter(g => g.patient_id === r.patient_id)
     return {
-      patientId: r.patient_id, name: r.patient_name, appointments: Number(r.appts), firstContactAt: r.first_at, lastConfirmedDate: r.last_confirmed ?? null,
+      patientId: r.patient_id, name: r.patient_name, appointments: Number(r.appts || 0), firstContactAt: r.first_at, lastConfirmedDate: r.last_confirmed ?? null,
       nextAppointment: next || null,
+      lastAppointment: last || null,   // status 'accepted' here means the visit date passed but it was not marked complete
       access: { active: mine.length > 0, categories: [...new Set(mine.flatMap(g => String(g.categories).split(',')))].sort(), expiresAt: mine.map(g => g.expires_at).sort().pop() ?? null },
     }
   })

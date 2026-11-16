@@ -253,7 +253,11 @@ export function PatientsView({ onOpenInsights, onOpenNotes }) {
                 <tr key={p.patientId}>
                   <td className="py-3 px-3"><span className="flex items-center gap-2"><span className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 font-bold text-xs flex items-center justify-center">{initials(p.name)}</span><span className={`font-semibold ${navy}`}>{p.name}</span></span></td>
                   <td className="px-3 text-slate-700">{p.appointments}</td>
-                  <td className="px-3 text-slate-700">{p.nextAppointment ? `${fmtDay(p.nextAppointment.date)} · ${p.nextAppointment.time}` : '—'}</td>
+                  <td className="px-3 text-slate-700">{p.nextAppointment ? `${fmtDay(p.nextAppointment.date)} · ${p.nextAppointment.time}` : (
+                    <span className="text-slate-500">None upcoming{p.lastAppointment && (
+                      <span className="block text-xs text-slate-400">Last: {fmtDay(p.lastAppointment.date)}{p.lastAppointment.status === 'accepted' ? ' · not marked complete' : ''}</span>
+                    )}</span>
+                  )}</td>
                   <td className="px-3">{p.access.active
                     ? <span className="text-xs text-emerald-700 font-semibold">{p.access.categories.length} categor{p.access.categories.length === 1 ? 'y' : 'ies'} shared</span>
                     : <span className="text-xs text-slate-500">Not shared</span>}</td>
